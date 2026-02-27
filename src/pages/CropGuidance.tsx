@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { locationData } from "@/data/locationData";
 
-const API_BASE = "http://localhost:8000/api/crop-guidance";
+const API_BASE = "https://smart-farming-rgm.onrender.com/api/crop-guidance";
 
 const soilOptions = [
   { label: "Loamy", value: "Loamy" }, { label: "Clay", value: "Clay" }, { label: "Sandy", value: "Sandy" },
