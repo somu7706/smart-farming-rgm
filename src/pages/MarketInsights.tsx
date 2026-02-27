@@ -38,8 +38,8 @@ interface peakData {
 }
 
 // Ensure the host is correct for WebSocket & API
-const AI_ENGINE_URL = "http://localhost:8000";
-const WS_URL = "ws://localhost:8000/ws/market-stream";
+const AI_ENGINE_URL = "https://smart-farming-rgm.onrender.com";
+const WS_URL = "wss://smart-farming-rgm.onrender.com/ws/market-stream";
 
 const MarketInsights = () => {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
