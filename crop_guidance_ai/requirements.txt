@@ -6,8 +6,8 @@ joblib
 groq
 pydantic
 python-dotenv
-sqlalchemy
+SQLAlchemy
 apscheduler
-pillow
+Pillow
 numpy
 scipy
