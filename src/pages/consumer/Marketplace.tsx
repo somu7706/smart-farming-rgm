@@ -1,0 +1,216 @@
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import MarketplaceStats from "@/components/marketplace/MarketplaceStats";
+import MarketplaceFilters from "@/components/marketplace/MarketplaceFilters";
+import CropCard, { type MarketCrop } from "@/components/marketplace/CropCard";
+import OrderModal from "@/components/marketplace/OrderModal";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+
+const ITEMS_PER_PAGE = 20;
+
+function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const Marketplace = () => {
+  const { user } = useAuth();
+  const [items, setItems] = useState<MarketCrop[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [consumerLoc, setConsumerLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [cropFilter, setCropFilter] = useState("all");
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
+  const [sortBy, setSortBy] = useState("price_asc");
+  const [page, setPage] = useState(1);
+
+  // Modal
+  const [modalItem, setModalItem] = useState<MarketCrop | null>(null);
+  const [modalMode, setModalMode] = useState<"buy" | "bulk">("buy");
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Get consumer location
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("profiles").select("latitude, longitude").eq("id", user.id).single().then(({ data }) => {
+      if (data?.latitude && data?.longitude) setConsumerLoc({ lat: data.latitude, lng: data.longitude });
+    });
+  }, [user]);
+
+  // Fetch data
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const { data: profiles } = await supabase.rpc("get_public_farmer_profiles");
+    if (!profiles?.length) { setLoading(false); return; }
+
+    const { data: details } = await supabase.from("farmer_details").select("*");
+    const detailsMap = new Map((details || []).map((d: any) => [d.user_id, d]));
+
+    // Fetch order counts per crop_name
+    const { data: orders } = await supabase.from("orders").select("crop_name");
+    const counts: Record<string, number> = {};
+    (orders || []).forEach((o: any) => { counts[o.crop_name] = (counts[o.crop_name] || 0) + 1; });
+    setOrderCounts(counts);
+
+    const merged: MarketCrop[] = profiles
+      .filter((p) => detailsMap.has(p.id))
+      .map((p) => {
+        const d = detailsMap.get(p.id) as any;
+        const cropName = d.primary_crop as string;
+        let distance_km: number | null = null;
+        if (consumerLoc && d.latitude && d.longitude) {
+          distance_km = haversine(consumerLoc.lat, consumerLoc.lng, d.latitude, d.longitude);
+        }
+        return {
+          farmer_id: p.id,
+          farmer_name: p.full_name,
+          region: p.region,
+          crop_name: cropName,
+          total_yield: d.total_yield as number,
+          expected_price: d.expected_price as number,
+          farming_type: d.farming_type as string,
+          latitude: d.latitude,
+          longitude: d.longitude,
+          demand_level: (counts[cropName] || 0) >= 3 ? "high" as const : "stable" as const,
+          distance_km,
+        };
+      });
+
+    setItems(merged);
+    if (merged.length > 0) {
+      const max = Math.max(...merged.map((i) => i.expected_price));
+      setPriceRange([0, max]);
+    }
+    setLoading(false);
+  }, [consumerLoc]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Realtime subscription for price changes
+  useEffect(() => {
+    const channel = supabase
+      .channel("farmer_details_realtime")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "farmer_details" }, () => {
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchData]);
+
+  // Computed values
+  const crops = useMemo(() => [...new Set(items.map((i) => i.crop_name))].sort(), [items]);
+  const regions = useMemo(() => [...new Set(items.map((i) => i.region).filter(Boolean) as string[])].sort(), [items]);
+  const farmingTypes = useMemo(() => [...new Set(items.map((i) => i.farming_type))].sort(), [items]);
+  const maxPrice = useMemo(() => items.length ? Math.max(...items.map((i) => i.expected_price)) : 0, [items]);
+
+  const filtered = useMemo(() => {
+    let result = items;
+    if (debouncedSearch) {
+      const s = debouncedSearch.toLowerCase();
+      result = result.filter((i) =>
+        i.crop_name.toLowerCase().includes(s) ||
+        (i.region || "").toLowerCase().includes(s) ||
+        i.farmer_name.toLowerCase().includes(s)
+      );
+    }
+    if (cropFilter !== "all") result = result.filter((i) => i.crop_name === cropFilter);
+    if (regionFilter !== "all") result = result.filter((i) => i.region === regionFilter);
+    if (typeFilter !== "all") result = result.filter((i) => i.farming_type === typeFilter);
+    result = result.filter((i) => i.expected_price >= priceRange[0] && i.expected_price <= priceRange[1]);
+
+    if (sortBy === "price_asc") result = [...result].sort((a, b) => a.expected_price - b.expected_price);
+    else if (sortBy === "price_desc") result = [...result].sort((a, b) => b.expected_price - a.expected_price);
+    else if (sortBy === "yield_desc") result = [...result].sort((a, b) => b.total_yield - a.total_yield);
+    else if (sortBy === "nearest") result = [...result].sort((a, b) => (a.distance_km ?? 99999) - (b.distance_km ?? 99999));
+
+    return result;
+  }, [items, debouncedSearch, cropFilter, regionFilter, typeFilter, priceRange, sortBy]);
+
+  // Stats
+  const stats = useMemo(() => ({
+    totalCrops: new Set(items.map((i) => i.crop_name)).size,
+    avgPrice: items.length ? items.reduce((s, i) => s + i.expected_price, 0) / items.length : 0,
+    activeFarmers: new Set(items.map((i) => i.farmer_id)).size,
+    totalQuantity: items.reduce((s, i) => s + i.total_yield, 0),
+  }), [items]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  // Reset page on filter change
+  useEffect(() => { setPage(1); }, [debouncedSearch, cropFilter, regionFilter, typeFilter, priceRange, sortBy]);
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <h1 className="text-2xl font-display font-bold text-foreground">Marketplace</h1>
+
+      <MarketplaceStats {...stats} loading={loading} />
+
+      <MarketplaceFilters
+        search={search} onSearch={setSearch}
+        cropFilter={cropFilter} onCropFilter={setCropFilter}
+        regionFilter={regionFilter} onRegionFilter={setRegionFilter}
+        typeFilter={typeFilter} onTypeFilter={setTypeFilter}
+        priceRange={priceRange} onPriceRange={setPriceRange} maxPrice={maxPrice}
+        sortBy={sortBy} onSortBy={setSortBy}
+        crops={crops} regions={regions} farmingTypes={farmingTypes}
+      />
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreground">Loading marketplace...</span>
+        </div>
+      ) : paginated.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No crops currently available. Check back soon.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginated.map((item, idx) => (
+              <CropCard
+                key={`${item.farmer_id}-${idx}`}
+                item={item}
+                onBuyNow={(i) => { setModalItem(i); setModalMode("buy"); }}
+                onBulkOrder={(i) => { setModalItem(i); setModalMode("bulk"); }}
+              />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+              <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
+          )}
+        </>
+      )}
+
+      <OrderModal
+        item={modalItem}
+        mode={modalMode}
+        userId={user?.id}
+        onClose={() => setModalItem(null)}
+      />
+    </div>
+  );
+};
+
+export default Marketplace;
