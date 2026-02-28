@@ -68,29 +68,91 @@ const Weather = () => {
 
         console.log("Fetching live weather for region:", userRegion);
 
-        // Call edge function
-        const { data, error: fnError } = await supabase.functions.invoke("weather-api", {
-          body: { region: userRegion },
+        const API_KEY = "c2520c02b4a606631e800dd742bab498";
+
+        // Fetch Current Weather
+        const currentRes = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(userRegion)}&appid=${API_KEY}&units=metric`
+        );
+        const currentData = await currentRes.json();
+
+        if (currentData.cod === 401) {
+          throw new Error("Invalid Weather API Key provided. Please check your key.");
+        }
+        if (currentData.cod !== 200) {
+          throw new Error(currentData.message || "Failed to fetch current weather");
+        }
+
+        // Fetch 5-Day Forecast
+        const forecastRes = await fetch(
+          `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(userRegion)}&appid=${API_KEY}&units=metric`
+        );
+        const forecastData = await forecastRes.json();
+
+        if (forecastData.cod !== "200") {
+          throw new Error(forecastData.message || "Failed to fetch forecast");
+        }
+
+        const owmToMeteoCode = (id: number) => {
+          if (id >= 200 && id < 300) return 95; // Thunderstorm
+          if (id >= 300 && id < 400) return 51; // Drizzle
+          if (id >= 500 && id < 600) {
+            if (id === 502 || id === 503 || id === 504) return 65; // Heavy rain
+            return 61; // Slight/Moderate rain
+          }
+          if (id >= 600 && id < 700) {
+            if (id === 602) return 75; // Heavy snow
+            return 71; // Slight snow
+          }
+          if (id >= 700 && id < 800) return 45; // Fog
+          if (id === 800) return 0; // Clear
+          if (id === 801) return 1; // Mainly clear
+          if (id === 802) return 2; // Partly cloudy
+          if (id === 803 || id === 804) return 3; // Overcast
+          return 0;
+        };
+
+        const dailyForecasts = new Map<string, any>();
+
+        forecastData.list.forEach((item: any) => {
+          const date = item.dt_txt.split(' ')[0];
+          const precipitation = item.rain && item.rain['3h'] ? item.rain['3h'] : 0;
+          const windSpeedKmh = item.wind.speed * 3.6;
+
+          if (!dailyForecasts.has(date)) {
+            dailyForecasts.set(date, {
+              date,
+              temp_max: item.main.temp_max,
+              temp_min: item.main.temp_min,
+              precipitation: precipitation,
+              wind_speed_max: windSpeedKmh,
+              weather_code: owmToMeteoCode(item.weather[0].id),
+              condition: item.weather[0].main
+            });
+          } else {
+            const day = dailyForecasts.get(date);
+            day.temp_max = Math.max(day.temp_max, item.main.temp_max);
+            day.temp_min = Math.min(day.temp_min, item.main.temp_min);
+            day.precipitation += precipitation;
+            day.wind_speed_max = Math.max(day.wind_speed_max, windSpeedKmh);
+          }
         });
 
-        if (fnError) {
-          console.error("Weather function error:", fnError);
-          setError("Failed to fetch weather data. Please try again.");
-          toast.error("Weather data unavailable");
-          setLoading(false);
-          return;
-        }
+        const weatherData: WeatherData = {
+          location: { name: currentData.name, country: currentData.sys.country || "" },
+          current: {
+            temperature: currentData.main.temp,
+            humidity: currentData.main.humidity,
+            wind_speed: currentData.wind.speed * 3.6,
+            feels_like: currentData.main.feels_like,
+            weather_code: owmToMeteoCode(currentData.weather[0].id),
+            condition: currentData.weather[0].main,
+          },
+          forecast: Array.from(dailyForecasts.values()).slice(0, 5) as ForecastDay[],
+        };
 
-        if (data?.error) {
-          console.error("Weather API error:", data.error);
-          setError(data.error);
-          toast.error(data.error);
-          setLoading(false);
-          return;
-        }
-
-        console.log("Weather data received:", data);
-        setWeather(data);
+        console.log("Weather data received:", weatherData);
+        setWeather(weatherData);
       } catch (err) {
         console.error("Weather fetch error:", err);
         setError("An unexpected error occurred while fetching weather data.");
