@@ -5,6 +5,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const WEATHER_API_KEY = "c2520c02b4a606631e800dd742bab498";
+
+function owmToMeteoCode(id: number) {
+  if (id >= 200 && id < 300) return 95; // Thunderstorm
+  if (id >= 300 && id < 400) return 51; // Drizzle
+  if (id >= 500 && id < 600) {
+    if (id === 502 || id === 503 || id === 504) return 65; // Heavy rain
+    return 61; // Slight/Moderate rain
+  }
+  if (id >= 600 && id < 700) {
+    if (id === 602) return 75; // Heavy snow
+    return 71; // Slight snow
+  }
+  if (id >= 700 && id < 800) return 45; // Fog
+  if (id === 800) return 0; // Clear
+  if (id === 801) return 1; // Mainly clear
+  if (id === 802) return 2; // Partly cloudy
+  if (id === 803 || id === 804) return 3; // Overcast
+  return 0;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -19,77 +40,86 @@ serve(async (req) => {
       });
     }
 
-    console.log("Fetching weather for region:", region);
+    console.log("Fetching OpenWeatherMap weather for region:", region);
 
-    // Step 1: Geocode the region name to lat/lon using Open-Meteo Geocoding API (free, no key)
-    const geoRes = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(region)}&count=1&language=en&format=json`
+    // Fetch Current Weather
+    const currentRes = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(region)}&appid=${WEATHER_API_KEY}&units=metric`
     );
-    const geoData = await geoRes.json();
+    const currentData = await currentRes.json();
 
-    if (!geoData.results || geoData.results.length === 0) {
-      return new Response(JSON.stringify({ error: `Could not find location: ${region}` }), {
+    if (currentData.cod !== 200) {
+      console.error("OpenWeatherMap error:", currentData.message);
+      return new Response(JSON.stringify({ error: `Could not fetch weather: ${currentData.message}` }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const { latitude, longitude, name, country } = geoData.results[0];
-    console.log(`Geocoded ${region} to ${name}, ${country} (${latitude}, ${longitude})`);
-
-    // Step 2: Fetch current weather + 5-day forecast from Open-Meteo (free, no key)
-    const weatherRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
-      `&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature` +
-      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max` +
-      `&timezone=auto&forecast_days=5`
+    // Fetch 5-Day Forecast
+    const forecastRes = await fetch(
+      `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(region)}&appid=${WEATHER_API_KEY}&units=metric`
     );
-    const weatherData = await weatherRes.json();
+    const forecastData = await forecastRes.json();
 
-    if (weatherData.error) {
-      console.error("Open-Meteo error:", weatherData.reason);
-      return new Response(JSON.stringify({ error: "Weather API error" }), {
-        status: 500,
+    if (forecastData.cod !== "200") {
+      console.error("OpenWeatherMap forecast error:", forecastData.message);
+      return new Response(JSON.stringify({ error: `Could not fetch forecast: ${forecastData.message}` }), {
+        status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Map weather codes to descriptions
-    const weatherCodeMap: Record<number, string> = {
-      0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
-      45: "Foggy", 48: "Depositing rime fog",
-      51: "Light drizzle", 53: "Moderate drizzle", 55: "Dense drizzle",
-      61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
-      71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow",
-      80: "Slight rain showers", 81: "Moderate rain showers", 82: "Violent rain showers",
-      95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail",
-    };
+    const { name, sys, coord } = currentData;
+    const country = sys.country || "";
+    const latitude = coord.lat;
+    const longitude = coord.lon;
 
-    const current = weatherData.current;
-    const daily = weatherData.daily;
+    const currentCondition = currentData.weather[0];
+
+    // Aggregate 3-hour data into daily data
+    const dailyForecasts = new Map<string, any>();
+
+    forecastData.list.forEach((item: any) => {
+      const date = item.dt_txt.split(' ')[0];
+      const precipitation = item.rain && item.rain['3h'] ? item.rain['3h'] : 0;
+      const windSpeedKmh = item.wind.speed * 3.6; // convert m/s to km/h
+
+      if (!dailyForecasts.has(date)) {
+        dailyForecasts.set(date, {
+          date,
+          temp_max: item.main.temp_max,
+          temp_min: item.main.temp_min,
+          precipitation: precipitation,
+          wind_speed_max: windSpeedKmh,
+          weather_code: owmToMeteoCode(item.weather[0].id),
+          condition: item.weather[0].main
+        });
+      } else {
+        const day = dailyForecasts.get(date);
+        day.temp_max = Math.max(day.temp_max, item.main.temp_max);
+        day.temp_min = Math.min(day.temp_min, item.main.temp_min);
+        day.precipitation += precipitation;
+        day.wind_speed_max = Math.max(day.wind_speed_max, windSpeedKmh);
+      }
+    });
+
+    const forecast = Array.from(dailyForecasts.values()).slice(0, 5);
 
     const result = {
       location: { name, country, latitude, longitude },
       current: {
-        temperature: current.temperature_2m,
-        humidity: current.relative_humidity_2m,
-        wind_speed: current.wind_speed_10m,
-        feels_like: current.apparent_temperature,
-        weather_code: current.weather_code,
-        condition: weatherCodeMap[current.weather_code] || "Unknown",
+        temperature: currentData.main.temp,
+        humidity: currentData.main.humidity,
+        wind_speed: currentData.wind.speed * 3.6, // m/s to km/h
+        feels_like: currentData.main.feels_like,
+        weather_code: owmToMeteoCode(currentCondition.id),
+        condition: currentCondition.main,
       },
-      forecast: daily.time.map((date: string, i: number) => ({
-        date,
-        temp_max: daily.temperature_2m_max[i],
-        temp_min: daily.temperature_2m_min[i],
-        precipitation: daily.precipitation_sum[i],
-        wind_speed_max: daily.wind_speed_10m_max[i],
-        weather_code: daily.weather_code[i],
-        condition: weatherCodeMap[daily.weather_code[i]] || "Unknown",
-      })),
+      forecast: forecast,
     };
 
-    console.log("Weather data fetched successfully");
+    console.log("Weather data fetched successfully from OpenWeatherMap");
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
