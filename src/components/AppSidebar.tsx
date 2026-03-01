@@ -19,7 +19,6 @@ const navItems = [
   { to: "/farmer/govt-schemes", label: "Govt Schemes", icon: Landmark },
   { to: "/farmer/fertilizer", label: "AI Chatbot", icon: FlaskConical },
   { to: "/farmer/orders", label: "Orders", icon: ShoppingCart },
-  { to: "/farmer/quantum-analysis", label: "Quantum Analysis", icon: Atom },
   { to: "/agri-chrono", label: "AgriChrono™", icon: Clock },
 ];
 

@@ -11,6 +11,7 @@ import RoleGuard from "@/components/RoleGuard";
 // Auth pages
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
+import Landing from "@/pages/Landing";
 
 // Farmer layout & pages
 import AppLayout from "./components/AppLayout";
@@ -24,7 +25,6 @@ import RegionalInsights from "./pages/RegionalInsights";
 import Irrigation from "./pages/Irrigation";
 import Fertilizer from "./pages/Fertilizer";
 import CropGuidance from "./pages/CropGuidance";
-import QuantumAnalysis from "./pages/QuantumAnalysis";
 import AgriChrono from "./pages/AgriChrono";
 
 // Consumer layout & pages
@@ -73,7 +73,7 @@ const App = () => (
             <AuthProvider>
               <Routes>
                 {/* Public */}
-                <Route path="/" element={<Navigate to="/auth/login" replace />} />
+                <Route path="/" element={<Landing />} />
                 <Route path="/auth/login" element={<Login />} />
                 <Route path="/auth/register" element={<Register />} />
 
@@ -89,7 +89,6 @@ const App = () => (
                 <Route path="/farmer/fertilizer" element={<FarmerRoute><Fertilizer /></FarmerRoute>} />
                 <Route path="/farmer/crop-guidance" element={<FarmerRoute><CropGuidance /></FarmerRoute>} />
                 <Route path="/farmer/orders" element={<FarmerRoute><FarmerOrders /></FarmerRoute>} />
-                <Route path="/farmer/quantum-analysis" element={<FarmerRoute><QuantumAnalysis /></FarmerRoute>} />
                 <Route path="/agri-chrono" element={<FarmerRoute><AgriChrono /></FarmerRoute>} />
 
                 {/* Consumer routes */}
