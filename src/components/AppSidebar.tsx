@@ -2,7 +2,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, ScanLine, Landmark, Cloud, BarChart3,
   TrendingUp, MapPin, Droplets, FlaskConical, BookOpen, ShoppingCart, LogOut,
-  Atom, Clock
+  Clock
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
