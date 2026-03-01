@@ -42,8 +42,8 @@ const AppSidebar = () => {
               key={item.to}
               to={item.to}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-0.5 ${isActive
-                ? "bg-accent text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-accent text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
             >
               <item.icon className="w-4 h-4" />
