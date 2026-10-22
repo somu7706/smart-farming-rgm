@@ -165,15 +165,29 @@ def update_market_data():
     # Broadcast
     if manager.active_connections:
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
-            loop = None
+            try:
+                loop = asyncio.get_event_loop()
+            except Exception:
+                loop = None
         if loop and loop.is_running():
             asyncio.run_coroutine_threadsafe(manager.broadcast(json.dumps({"type": "MARKET_UPDATE", "data": latest_data})), loop)
 
 scheduler = AsyncIOScheduler()
 scheduler.add_job(update_market_data, 'interval', seconds=5) # Real-time every 5 seconds for visual effect
-scheduler.start()
+
+def start_scheduler():
+    try:
+        if not scheduler.running:
+            scheduler.start()
+            print("Market data scheduler started successfully.")
+    except Exception as e:
+        print(f"Warning: Failed to start scheduler: {e}")
+
+@router.on_event("startup")
+def on_startup():
+    start_scheduler()
 
 @router.websocket("/ws/market-stream")
 async def websocket_endpoint(websocket: WebSocket):

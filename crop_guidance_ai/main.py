@@ -79,6 +79,13 @@ def load_resources():
         else:
             print(f"Dataset file {d} not found in {DATASETS_DIR}")
 
+    # Start Market Scheduler safely
+    try:
+        from market_engine import start_scheduler
+        start_scheduler()
+    except Exception as e:
+        print(f"Warning starting market engine scheduler: {e}")
+
 def ask_groq(prompt: str, system_prompt: str = "You are an agricultural expert AI. Only answer questions related to agriculture, farming, crops, and soil. Do not answer off-topic questions.") -> str:
     if not groq_client: return "AI explanation temporarily unavailable. Please try again."
     try:
