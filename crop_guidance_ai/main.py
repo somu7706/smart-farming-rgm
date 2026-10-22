@@ -313,8 +313,86 @@ class CropAiEngine:
 def scan_crop(data: ScanInput):
     # Process image (resize, normalize, quality check)
     img_array, quality = ImageProcessor.process_image(data.image)
-    
-    # 2-Stage Inference Pipeline
+
+    # 1. Real AI Vision Diagnosis using Groq Qwen Vision
+    if groq_client:
+        system_prompt = "You are an expert agricultural plant pathologist AI."
+        user_prompt = """Examine this image carefully:
+Step 1: Check whether this image is an agricultural plant, crop, crop leaf, fruit, vegetable, or farm field.
+- If it is a human, selfie, face, person, animal, vehicle, indoor object, or NOT a plant, return JSON:
+{
+  "is_crop": false,
+  "error": "No plant detected. The image appears to be a person or non-plant object. Please upload a clear photo of a crop leaf or plant."
+}
+
+Step 2: If it IS a plant or crop, identify the crop and any plant disease (or 'Healthy'):
+{
+  "is_crop": true,
+  "crop_name": "<Crop Name, e.g. Tomato, Potato, Rice, Wheat, Cotton, Chilli, Corn, etc.>",
+  "crop_confidence": 0.92,
+  "disease_name": "<Specific Disease Name or 'Healthy'>",
+  "disease_confidence": 0.90,
+  "severity": "Low",
+  "severity_pct": 10,
+  "advisory": {
+    "symptoms": ["<visual symptoms observed>"],
+    "causes": ["<pathogen, environment, or none>"],
+    "treatment_plan": {
+      "chemical_solution": "<recommended chemical fungicide or pesticide>",
+      "organic_solution": "<organic spray such as neem oil>",
+      "fertilizer_advice": "<NPK or nutrient guidance>",
+      "irrigation_adjustment": "<watering adjustment>"
+    },
+    "prevention_tips": ["<prevention step 1>", "<prevention step 2>"],
+    "expected_yield_impact": "<estimated yield impact>",
+    "market_impact": "<market impact>",
+    "recovery_timeline": "<time to recover>"
+  }
+}
+Return ONLY pure JSON."""
+        try:
+            response = groq_client.chat.completions.create(
+                model="qwen/qwen3.8-27b",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": user_prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{data.image}"}}
+                        ]
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=800
+            )
+            content = response.choices[0].message.content.strip()
+            start = content.find('{')
+            end = content.rfind('}') + 1
+            vision_data = json.loads(content[start:end])
+
+            if vision_data.get("is_crop") is False:
+                raise HTTPException(
+                    status_code=400,
+                    detail=vision_data.get("error", "No crop or plant detected. The image appears to be a person or non-plant object. Please upload a clear photo of a crop leaf.")
+                )
+
+            if vision_data.get("crop_name"):
+                return {
+                    "crop_name": vision_data.get("crop_name", "Crop"),
+                    "crop_confidence": vision_data.get("crop_confidence", 0.92),
+                    "disease_name": vision_data.get("disease_name", "Healthy"),
+                    "disease_confidence": vision_data.get("disease_confidence", 0.90),
+                    "severity": vision_data.get("severity", "Low"),
+                    "severity_pct": vision_data.get("severity_pct", 10),
+                    "advisory": vision_data.get("advisory", {})
+                }
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Groq Vision error, falling back to simulation: {e}")
+
+    # Fallback simulation
     detected_crop, crop_conf, disease, disease_conf, severity, severity_pct = CropAiEngine.predict(img_array)
 
     # Call Groq for dynamic production-grade advisory

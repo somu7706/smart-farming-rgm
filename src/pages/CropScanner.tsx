@@ -162,6 +162,11 @@ const CropScanner = () => {
         return;
       }
 
+      const errData = await response.json().catch(() => null);
+      if (errData?.detail) {
+        throw new Error(errData.detail);
+      }
+
       // Fallback to Supabase function if Render is unavailable
       const { data: supaData, error: supaError } = await supabase.functions.invoke("crop-disease-scan", {
         body: { imageBase64, cropType: selectedCrop },
