@@ -88,32 +88,26 @@ def load_resources():
 
 def ask_groq(prompt: str, system_prompt: str = "You are an agricultural expert AI. Only answer questions related to agriculture, farming, crops, and soil. Do not answer off-topic questions.") -> str:
     if not groq_client: return "AI explanation temporarily unavailable. Please try again."
-    try:
-        response = groq_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            model="llama-3.3-70b-versatile",
-            max_tokens=512
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print(f"Groq API Error with llama-3.3-70b-versatile: {e}")
+    
+    candidate_models = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"]
+    for m in candidate_models:
         try:
-            # Fallback model
             response = groq_client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                model="llama-3.1-8b-instant",
+                model=m,
                 max_tokens=512
             )
-            return response.choices[0].message.content
-        except Exception as e2:
-            print(f"Groq API Error with fallback model: {e2}")
-            return "AI explanation temporarily unavailable. Please try again."
+            content = response.choices[0].message.content
+            if content:
+                return content
+        except Exception as e:
+            print(f"Groq API Error with model {m}: {e}")
+            continue
+
+    return "AI explanation temporarily unavailable. Please try again."
 
 def generate_ai_explanation(crop_name: str, input_data: dict) -> str:
     system_prompt = "You are an agricultural AI expert. Only give farming-related advice."

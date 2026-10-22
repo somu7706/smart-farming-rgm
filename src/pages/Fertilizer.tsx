@@ -30,15 +30,34 @@ const Fertilizer = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("fertilizer-chat", {
-        body: { message: userMsg },
-      });
+      let replyText = "";
+      try {
+        const res = await fetch("https://smart-farming-rgm.onrender.com/api/crop-guidance/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: `As an agricultural fertilizer and soil expert, advise: ${userMsg}` })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.response && !data.response.includes("temporarily unavailable")) {
+            replyText = data.response;
+          }
+        }
+      } catch (backendErr) {
+        console.warn("Backend chat unavailable, trying Supabase fallback", backendErr);
+      }
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (!replyText) {
+        const { data, error } = await supabase.functions.invoke("fertilizer-chat", {
+          body: { message: userMsg },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        replyText = data.reply || "I couldn't process that. Please try again.";
+      }
 
       const botTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      setMessages((prev) => [...prev, { role: "bot", text: data.reply || "I couldn't process that. Please try again.", time: botTime }]);
+      setMessages((prev) => [...prev, { role: "bot", text: replyText, time: botTime }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to get response";
       toast.error(msg);

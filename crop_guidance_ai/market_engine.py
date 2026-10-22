@@ -257,12 +257,20 @@ def strategy(req: PredictionRequest):
     try:
         resp = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-120b",
             max_tokens=60
         )
         reasoning = resp.choices[0].message.content
     except Exception as e:
-        reasoning = f"AI Prediction suggests this strategy based on past data trends."
+        try:
+            resp = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="qwen/qwen3.8-27b",
+                max_tokens=60
+            )
+            reasoning = resp.choices[0].message.content
+        except Exception:
+            reasoning = "AI Prediction suggests this strategy based on past data trends."
         
     return {
         "recommendation": rec,
