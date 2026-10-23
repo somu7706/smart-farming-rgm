@@ -16,7 +16,7 @@ export interface SyncEvent {
 type SyncCallback = (event: SyncEvent) => void;
 
 const getSyncWsUrl = (): string => {
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  const apiUrl = import.meta.env.VITE_API_URL || "https://smart-farming-rgm.onrender.com/api";
   const url = new URL(apiUrl, window.location.origin);
   const protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${url.host}/ws/sync`;
