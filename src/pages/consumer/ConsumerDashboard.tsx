@@ -50,9 +50,9 @@ const ConsumerDashboard = () => {
         .from("orders")
         .select("*", { count: "exact", head: true })
         .eq("consumer_id", user.id)
-        .not("status", "in", '("delivered","rejected")');
+        .neq("status", "delivered").neq("status", "rejected");
 
-      console.log("Consumer stats:", { cropCount, avg, farmerCount, myOrderCount });
+      console.log("Consumer stats:", { pCount, avg, fCount, myOrderCount });
 
       setStats({
         products: pCount,
