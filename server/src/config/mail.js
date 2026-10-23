@@ -1,14 +1,17 @@
 import "dotenv/config";
 import nodemailer from "nodemailer";
 
+const user = (process.env.GMAIL_USER || process.env.EMAIL_USER || "").trim();
+const pass = (process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || "").replace(/\s+/g, "");
+
 export const transporter = nodemailer.createTransport({
   service: "gmail",
   host: "smtp.gmail.com",
   port: 465,
   secure: true,
-  auth: {
-    user: process.env.GMAIL_USER || process.env.EMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS,
+  auth: { user, pass },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
