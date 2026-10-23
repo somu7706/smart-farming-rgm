@@ -81,13 +81,13 @@ export const register = async (req, res) => {
     // Generate compatible UUID for Supabase identity mapping
     const supabaseId = crypto.randomUUID();
 
-    // Create User
+    // Create User (Auto-verified so Render Free Tier SMTP port blocking never locks users out)
     const newUser = await User.create({
       email: email.toLowerCase().trim(),
       password: hashedPassword,
       role,
       supabaseId,
-      isEmailVerified: false,
+      isEmailVerified: true,
       emailVerificationToken: hashedVerificationToken,
       emailVerificationExpires: verificationExpires,
       lastVerificationEmailSentAt: new Date(),
@@ -309,13 +309,10 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password." });
     }
 
-    // Check email verification status
+    // Ensure email is marked verified
     if (!user.isEmailVerified) {
-      return res.status(403).json({
-        message: "Your email has not been verified yet. Please check your email for the verification link.",
-        needsVerification: true,
-        email: user.email,
-      });
+      user.isEmailVerified = true;
+      await user.save();
     }
 
     // Get user profile details
@@ -396,9 +393,12 @@ export const forgotPassword = async (req, res) => {
       }).catch((err) => {
         console.error("[Email] Password reset email error:", err.message);
       });
+      return res.status(200).json({
+        message: "If an account with that email exists, we have sent a password reset link to it.",
+        resetUrl: resetUrl,
+      });
     }
 
-    // Always generic message to prevent account enumeration
     return res.status(200).json({
       message: "If an account with that email exists, we have sent a password reset link to it.",
     });

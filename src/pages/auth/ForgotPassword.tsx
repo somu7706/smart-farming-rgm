@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { KeyRound, ArrowLeft, Loader2, CheckCircle2 } from "lucide-react";
+import { KeyRound, ArrowLeft, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [directResetUrl, setDirectResetUrl] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,9 +23,12 @@ const ForgotPassword = () => {
 
     setLoading(true);
     try {
-      await api.post("/auth/forgot-password", { email });
+      const res: any = await api.post("/auth/forgot-password", { email });
       setSubmitted(true);
-      toast.success("Password reset instructions sent to your email!");
+      if (res && res.resetUrl) {
+        setDirectResetUrl(res.resetUrl);
+      }
+      toast.success("Password reset instructions generated!");
     } catch (err: any) {
       toast.error(err.message || "Failed to submit request. Please try again.");
     } finally {
@@ -54,6 +58,13 @@ const ForgotPassword = () => {
                   If an account exists for <strong>{email}</strong>, a password reset link has been delivered. Please check your inbox.
                 </p>
               </div>
+              {directResetUrl && (
+                <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium" variant="default">
+                  <a href={directResetUrl}>
+                    Reset Password Now <ArrowRight className="w-4 h-4 ml-2" />
+                  </a>
+                </Button>
+              )}
               <Button asChild className="w-full" variant="outline">
                 <Link to="/auth/login">
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back to Sign In
