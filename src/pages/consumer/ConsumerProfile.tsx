@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,12 +24,29 @@ const ConsumerProfile = () => {
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
-      const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (prof) {
-        setProfile(prof);
-        setDeliveryAddress((prof as any).delivery_address || "");
-        setLatitude(prof.latitude?.toString() || "");
-        setLongitude(prof.longitude?.toString() || "");
+      try {
+        const prof = await api.get<any>("/profile");
+        if (prof) {
+          setProfile({
+            full_name: prof.fullName || prof.full_name,
+            email: prof.email,
+            region: prof.region,
+            delivery_address: prof.deliveryAddress || prof.delivery_address || "",
+            latitude: prof.latitude,
+            longitude: prof.longitude,
+          });
+          setDeliveryAddress(prof.deliveryAddress || prof.delivery_address || "");
+          setLatitude(prof.latitude?.toString() || "");
+          setLongitude(prof.longitude?.toString() || "");
+        }
+      } catch (e) {
+        const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+        if (prof) {
+          setProfile(prof);
+          setDeliveryAddress((prof as any).delivery_address || "");
+          setLatitude(prof.latitude?.toString() || "");
+          setLongitude(prof.longitude?.toString() || "");
+        }
       }
       const { count } = await supabase.from("orders").select("*", { count: "exact", head: true }).eq("consumer_id", user.id);
       setOrderCount(count ?? 0);
@@ -39,16 +57,17 @@ const ConsumerProfile = () => {
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const updates: any = { delivery_address: deliveryAddress.trim() };
+    const updates: any = { deliveryAddress: deliveryAddress.trim() };
     if (latitude) updates.latitude = parseFloat(latitude);
     if (longitude) updates.longitude = parseFloat(longitude);
 
-    const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
-    setSaving(false);
-    if (error) {
-      toast.error("Failed to update profile");
-    } else {
-      toast.success("Profile updated successfully");
+    try {
+      await api.put("/profile", updates);
+      toast.success("Profile updated successfully in MongoDB");
+    } catch (error: any) {
+      toast.error("Failed to update profile: " + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 

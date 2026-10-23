@@ -11,6 +11,10 @@ import RoleGuard from "@/components/RoleGuard";
 // Auth pages
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
+import VerifyPending from "@/pages/auth/VerifyPending";
+import VerifyEmail from "@/pages/auth/VerifyEmail";
+import ForgotPassword from "@/pages/auth/ForgotPassword";
+import ResetPassword from "@/pages/auth/ResetPassword";
 import Landing from "@/pages/Landing";
 
 // Farmer layout & pages
@@ -72,10 +76,14 @@ const App = () => (
           >
             <AuthProvider>
               <Routes>
-                {/* Public */}
+                {/* Public & Auth */}
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth/login" element={<Login />} />
                 <Route path="/auth/register" element={<Register />} />
+                <Route path="/auth/verify-pending" element={<VerifyPending />} />
+                <Route path="/auth/verify-email" element={<VerifyEmail />} />
+                <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+                <Route path="/auth/reset-password" element={<ResetPassword />} />
 
                 {/* Farmer routes */}
                 <Route path="/farmer/dashboard" element={<FarmerRoute><Dashboard /></FarmerRoute>} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Sprout, TrendingUp, Droplets, AlertTriangle, Shield, ArrowRight, Heart, ChevronDown, IndianRupee, Package } from "lucide-react";
 import { toast } from "sonner";
@@ -23,30 +24,39 @@ const Dashboard = () => {
       try {
         console.log("Fetching dashboard stats for user:", user.id);
 
-        // Fetch farmer profile region
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("region")
-          .eq("id", user.id)
-          .single();
-        if (profile?.region) setFarmerRegion(profile.region);
-
-        // Fetch farmer details for crop count
-        const { data: farmerDetails } = await supabase
-          .from("farmer_details")
-          .select("primary_crop, secondary_crop, expected_price, water_availability")
-          .eq("user_id", user.id)
-          .single();
-
         let cropCount = 0;
         let waterLabel = "0L";
 
-        if (farmerDetails) {
-          cropCount = farmerDetails.primary_crop ? 1 : 0;
-          if (farmerDetails.secondary_crop && farmerDetails.secondary_crop !== "none" && farmerDetails.secondary_crop !== "") cropCount += 1;
+        try {
+          const prof = await api.get<any>("/profile");
+          if (prof?.region) setFarmerRegion(prof.region);
+          if (prof) {
+            cropCount = prof.primaryCrop ? 1 : 0;
+            if (prof.secondaryCrop && prof.secondaryCrop !== "none" && prof.secondaryCrop !== "") cropCount += 1;
+            const waterMap: Record<string, string> = { High: "3,200L", Medium: "2,450L", Low: "1,100L" };
+            waterLabel = waterMap[prof.waterAvailability] || "0L";
+          }
+        } catch (e) {
+          // Fallback to Supabase
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("region")
+            .eq("id", user.id)
+            .single();
+          if (profile?.region) setFarmerRegion(profile.region);
 
-          const waterMap: Record<string, string> = { High: "3,200L", Medium: "2,450L", Low: "1,100L" };
-          waterLabel = waterMap[farmerDetails.water_availability] || "0L";
+          const { data: farmerDetails } = await supabase
+            .from("farmer_details")
+            .select("primary_crop, secondary_crop, expected_price, water_availability")
+            .eq("user_id", user.id)
+            .single();
+
+          if (farmerDetails) {
+            cropCount = farmerDetails.primary_crop ? 1 : 0;
+            if (farmerDetails.secondary_crop && farmerDetails.secondary_crop !== "none" && farmerDetails.secondary_crop !== "") cropCount += 1;
+            const waterMap: Record<string, string> = { High: "3,200L", Medium: "2,450L", Low: "1,100L" };
+            waterLabel = waterMap[farmerDetails.water_availability] || "0L";
+          }
         }
 
         // Count active orders (not delivered, not rejected)

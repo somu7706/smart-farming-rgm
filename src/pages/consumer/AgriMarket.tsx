@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,36 +36,65 @@ const AgriMarket = () => {
   const [orderQty, setOrderQty] = useState("");
   const [ordering, setOrdering] = useState(false);
 
+  const fetchData = async () => {
+    try {
+      const prodRes = await api.get<any>("/products");
+      if (prodRes?.products && prodRes.products.length > 0) {
+        const mapped: MarketItem[] = prodRes.products.map((p: any) => ({
+          farmer_id: p.farmer_id || p.id,
+          farmer_name: p.farmer_name,
+          region: p.region,
+          crop_name: p.crop_name,
+          total_yield: p.total_yield,
+          expected_price: p.expected_price,
+          farming_type: p.farming_type,
+        }));
+        setItems(mapped);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn("MongoDB products fetch failed, falling back to Supabase:", e);
+    }
+
+    const { data: profiles } = await supabase
+      .rpc("get_public_farmer_profiles");
+
+    if (!profiles?.length) { setLoading(false); return; }
+
+    const { data: details } = await supabase.from("farmer_details").select("*");
+    const detailsMap = new Map((details || []).map((d: any) => [d.user_id, d]));
+
+    const merged: MarketItem[] = profiles
+      .filter((p) => detailsMap.has(p.id))
+      .map((p) => {
+        const d = detailsMap.get(p.id) as any;
+        return {
+          farmer_id: p.id,
+          farmer_name: p.full_name,
+          region: p.region,
+          crop_name: d.primary_crop as string,
+          total_yield: d.total_yield as number,
+          expected_price: d.expected_price as number,
+          farming_type: d.farming_type as string,
+        };
+      });
+
+    setItems(merged);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: profiles } = await supabase
-        .rpc("get_public_farmer_profiles");
-
-      if (!profiles?.length) { setLoading(false); return; }
-
-      const { data: details } = await supabase.from("farmer_details").select("*");
-      const detailsMap = new Map((details || []).map((d: any) => [d.user_id, d]));
-
-      const merged: MarketItem[] = profiles
-        .filter((p) => detailsMap.has(p.id))
-        .map((p) => {
-          const d = detailsMap.get(p.id) as any;
-          return {
-            farmer_id: p.id,
-            farmer_name: p.full_name,
-            region: p.region,
-            crop_name: d.primary_crop as string,
-            total_yield: d.total_yield as number,
-            expected_price: d.expected_price as number,
-            farming_type: d.farming_type as string,
-          };
-        });
-
-      setItems(merged);
-      setLoading(false);
-    };
     fetchData();
   }, []);
+
+  useRealtimeSync("product", () => {
+    fetchData();
+  });
+
+  useRealtimeSync("farmer_profile", () => {
+    fetchData();
+  });
 
   const crops = useMemo(() => [...new Set(items.map((i) => i.crop_name))], [items]);
   const regions = useMemo(() => [...new Set(items.map((i) => i.region).filter(Boolean))], [items]);

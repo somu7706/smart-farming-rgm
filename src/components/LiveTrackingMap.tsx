@@ -143,30 +143,59 @@ const LiveTrackingMap = ({ orderId, consumerLat, consumerLng, initialFarmerLat, 
   const lastRouteCalcRef = useRef<number>(0);
   const consumerPos: [number, number] = [consumerLat, consumerLng];
 
-  // Subscribe to realtime delivery_tracking updates
+  // Fetch initial tracking position and subscribe to live GPS updates
   useEffect(() => {
+    let isCancelled = false;
+
+    // 1. Fetch current tracking record immediately so map starts at current location
+    const fetchCurrentLocation = async () => {
+      try {
+        const { data } = await supabase
+          .from("delivery_tracking")
+          .select("current_latitude, current_longitude")
+          .eq("order_id", orderId)
+          .single();
+
+        if (!isCancelled && data && data.current_latitude && data.current_longitude) {
+          setFarmerPos([data.current_latitude, data.current_longitude]);
+        }
+      } catch (e) {
+        console.warn("[LiveTracking] Initial location fetch note:", e);
+      }
+    };
+
+    fetchCurrentLocation();
+
+    // 2. Subscribe to realtime delivery_tracking updates with scoped filter
     const channel = supabase
       .channel(`live-track-${orderId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "delivery_tracking" },
+        { event: "*", schema: "public", table: "delivery_tracking", filter: `order_id=eq.${orderId}` },
         (payload: any) => {
-          if (payload.new?.order_id === orderId) {
-            const lat = payload.new.current_latitude;
-            const lng = payload.new.current_longitude;
-            if (lat !== 0 && lng !== 0) {
-              setPrevFarmerPos((prev) => prev);
-              setFarmerPos((prev) => {
-                setPrevFarmerPos(prev);
-                return [lat, lng];
-              });
-            }
+          const lat = payload.new?.current_latitude;
+          const lng = payload.new?.current_longitude;
+          if (lat && lng && lat !== 0 && lng !== 0) {
+            setFarmerPos((prev) => {
+              setPrevFarmerPos(prev);
+              return [lat, lng];
+            });
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log(`[LiveTracking] Subscribed to GPS updates for order ${orderId}`);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`[LiveTracking] Channel status: ${status}, retrying location fetch`);
+          fetchCurrentLocation();
+        }
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      isCancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [orderId]);
 
   // Debounced route fetch (max every 10 seconds)

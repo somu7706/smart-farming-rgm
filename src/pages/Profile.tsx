@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,13 +34,40 @@ const UnifiedProfile = () => {
 
     const fetchProfile = async () => {
         setLoading(true);
-        const { data, error } = await supabase.from("profiles").select("*").eq("id", user?.id).single();
-        if (data) {
-            setInitialData(data);
-            setFormData(data);
-            setPhotoUrl((data as any).avatar_url || "");
+        try {
+            const data = await api.get<any>("/profile");
+            if (data) {
+                const normalized = {
+                    ...data,
+                    full_name: data.fullName || data.full_name || "",
+                    phone_number: data.phone || data.phone_number || "",
+                    farm_name: data.farmName || data.farm_name || "",
+                    total_land_area: data.totalLandArea ?? data.landArea ?? data.total_land_area ?? "",
+                    primary_crops: data.primaryCrop || data.primary_crops || "",
+                    irrigation_type: data.irrigationType || data.irrigation_type || "",
+                    soil_type: data.soilType || data.soil_type || "",
+                    years_of_experience: data.yearsOfExperience ?? data.years_of_experience ?? "",
+                    business_name: data.businessName || data.business_name || "",
+                    business_type: data.businessType || data.business_type || "",
+                    preferred_crops: data.preferredCrops || data.preferred_crops || "",
+                    purchase_volume_capacity: data.purchaseVolumeCapacity ?? data.purchase_volume_capacity ?? "",
+                    avatar_url: data.avatarUrl || data.avatar_url || "",
+                };
+                setInitialData(normalized);
+                setFormData(normalized);
+                setPhotoUrl(normalized.avatar_url || "");
+            }
+        } catch (err: any) {
+            console.error("Profile load error:", err);
+            const { data } = await supabase.from("profiles").select("*").eq("id", user?.id).single();
+            if (data) {
+                setInitialData(data);
+                setFormData(data);
+                setPhotoUrl((data as any).avatar_url || "");
+            }
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleInputChange = (field: string, value: string) => {
@@ -77,15 +105,39 @@ const UnifiedProfile = () => {
             purchase_volume_capacity: formData.purchase_volume_capacity ? parseFloat(formData.purchase_volume_capacity) : null,
         };
 
-        const { error } = await supabase.from("profiles").update(updates as any).eq("id", user?.id);
-
-        setSaving(false);
-        if (error) {
-            toast.error("Failed to update profile: " + error.message);
-        } else {
+        try {
+            const apiUpdates: any = {
+                fullName: formData.full_name,
+                phone: formData.phone_number,
+                region: formData.region,
+                state: formData.state,
+                district: formData.district,
+                mandal: formData.mandal,
+                address: formData.address,
+                avatarUrl: photoUrl || formData.avatar_url,
+            };
+            if (role === "farmer") {
+                apiUpdates.farmName = formData.farm_name;
+                apiUpdates.totalLandArea = formData.total_land_area ? parseFloat(formData.total_land_area) : null;
+                apiUpdates.landArea = formData.total_land_area ? parseFloat(formData.total_land_area) : null;
+                apiUpdates.primaryCrop = formData.primary_crops;
+                apiUpdates.irrigationType = formData.irrigation_type;
+                apiUpdates.soilType = formData.soil_type;
+                apiUpdates.yearsOfExperience = formData.years_of_experience ? parseFloat(formData.years_of_experience) : null;
+            } else {
+                apiUpdates.businessName = formData.business_name;
+                apiUpdates.businessType = formData.business_type;
+                apiUpdates.preferredCrops = formData.preferred_crops;
+                apiUpdates.purchaseVolumeCapacity = formData.purchase_volume_capacity ? parseFloat(formData.purchase_volume_capacity) : null;
+            }
+            await api.put("/profile", apiUpdates);
             toast.success("Profile updated successfully.");
             setInitialData({ ...updates });
             setEditMode(false);
+        } catch (err: any) {
+            toast.error("Failed to update profile: " + err.message);
+        } finally {
+            setSaving(false);
         }
     };
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -23,41 +25,68 @@ const FarmersDirectory = () => {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const fetchFarmers = async () => {
+    try {
+      const mongoFarmers = await api.get<any[]>("/profile/farmers");
+      if (mongoFarmers && mongoFarmers.length > 0) {
+        setFarmers(mongoFarmers);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn("MongoDB farmers fetch failed, falling back to Supabase:", e);
+    }
+
+    const { data: profiles } = await supabase
+      .rpc("get_public_farmer_profiles");
+
+    if (!profiles?.length) { setLoading(false); return; }
+
+    const { data: details } = await supabase.from("farmer_details")
+      .select("*");
+
+    const detailsMap = new Map((details || []).map((d: any) => [d.user_id, d]));
+
+    const merged = profiles
+      .filter((p) => detailsMap.has(p.id))
+      .map((p) => {
+        const d = detailsMap.get(p.id) as any;
+        return {
+          id: p.id,
+          full_name: p.full_name,
+          region: p.region,
+          primary_crop: d.primary_crop as string,
+          land_area: d.land_area as number,
+          total_yield: d.total_yield as number,
+          monthly_production: d.monthly_production as number,
+          expected_price: d.expected_price as number,
+          farming_type: d.farming_type as string,
+          water_availability: d.water_availability as string,
+        };
+      });
+
+    setFarmers(merged);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchFarmers = async () => {
-      const { data: profiles } = await supabase
-        .rpc("get_public_farmer_profiles");
-
-      if (!profiles?.length) { setLoading(false); return; }
-
-      const { data: details } = await supabase.from("farmer_details")
-        .select("*");
-
-      const detailsMap = new Map((details || []).map((d: any) => [d.user_id, d]));
-
-      const merged = profiles
-        .filter((p) => detailsMap.has(p.id))
-        .map((p) => {
-          const d = detailsMap.get(p.id) as any;
-          return {
-            id: p.id,
-            full_name: p.full_name,
-            region: p.region,
-            primary_crop: d.primary_crop as string,
-            land_area: d.land_area as number,
-            total_yield: d.total_yield as number,
-            monthly_production: d.monthly_production as number,
-            expected_price: d.expected_price as number,
-            farming_type: d.farming_type as string,
-            water_availability: d.water_availability as string,
-          };
-        });
-
-      setFarmers(merged);
-      setLoading(false);
-    };
     fetchFarmers();
+
+    const channel = supabase
+      .channel("farmer_directory_realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "farmer_details" }, () => {
+        fetchFarmers();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Real-time synchronization whenever any farmer updates their details in MongoDB
+  useRealtimeSync("farmer_profile", (event) => {
+    console.log("[FarmersDirectory] Live farmer update received:", event);
+    fetchFarmers();
+  });
 
   const filtered = farmers.filter(
     (f) =>

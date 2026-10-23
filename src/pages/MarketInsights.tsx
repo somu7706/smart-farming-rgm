@@ -39,12 +39,18 @@ interface peakData {
 
 // Ensure the host is correct for WebSocket & API
 const AI_ENGINE_URL = "https://smart-farming-rgm.onrender.com";
-const WS_URL = "wss://smart-farming-rgm.onrender.com/ws/market-stream";
+
+const getMarketWsUrl = () => {
+  if (import.meta.env.VITE_AI_WS_URL) return import.meta.env.VITE_AI_WS_URL;
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//smart-farming-rgm.onrender.com/ws/market-stream`;
+};
 
 const MarketInsights = () => {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [tickerAnimate, setTickerAnimate] = useState(false);
   const [selectedCrop, setSelectedCrop] = useState<string>("Rice");
+  const [streamStatus, setStreamStatus] = useState<"connected" | "reconnecting" | "polling" | "connecting">("connecting");
 
   // AI Panel states
   const [loadingAI, setLoadingAI] = useState(false);
@@ -53,47 +59,168 @@ const MarketInsights = () => {
   const [predictions, setPredictions] = useState<any>(null);
 
   const ws = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<any>(null);
+  const pingIntervalRef = useRef<any>(null);
+  const pollIntervalRef = useRef<any>(null);
+  const retryCountRef = useRef<number>(0);
+  const isUnmountedRef = useRef<boolean>(false);
   const tickerRef = useRef<HTMLDivElement>(null);
 
+  const applyMarketUpdate = (updates: any[]) => {
+    setTickerAnimate(true);
+    setTimeout(() => setTickerAnimate(false), 500);
+
+    setMarketData((prev) => {
+      // If prev is empty, initialize full market data from updates
+      if (prev.length === 0) {
+        return updates.map((u) => ({
+          crop_name: u.crop_name,
+          current_price: u.modal_price,
+          daily_change_pct: u.daily_change_pct || 0,
+          trend: u.trend_direction || "Stable",
+          demand: u.demand_score || 50,
+          supply: u.supply_score || 50,
+          volatility: u.volatility || 1.5,
+          history: [{ date: u.date || "Now", price: u.modal_price }],
+        }));
+      }
+
+      return prev.map((p) => {
+        const update = updates.find((d: any) => d.crop_name === p.crop_name);
+        if (update) {
+          const newHistory = [...p.history];
+          if (newHistory.length > 30) newHistory.shift();
+          newHistory.push({ date: update.date, price: update.modal_price });
+
+          return {
+            ...p,
+            current_price: update.modal_price,
+            daily_change_pct: update.daily_change_pct,
+            trend: update.trend_direction,
+            demand: update.demand_score,
+            supply: update.supply_score,
+            volatility: update.volatility,
+            history: newHistory,
+          };
+        }
+        return p;
+      });
+    });
+  };
+
+  const connectWs = () => {
+    if (isUnmountedRef.current) return;
+    const url = getMarketWsUrl();
+    console.log("[MarketWS] Connecting to:", url);
+
+    try {
+      const socket = new WebSocket(url);
+      ws.current = socket;
+
+      socket.onopen = () => {
+        if (isUnmountedRef.current) return;
+        console.log("[MarketWS] Connected successfully!");
+        setStreamStatus("connected");
+        retryCountRef.current = 0;
+
+        // Start ping keepalive
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send("ping");
+          }
+        }, 25000);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === "MARKET_UPDATE" && Array.isArray(payload.data)) {
+            applyMarketUpdate(payload.data);
+          }
+        } catch (e) {
+          // ignore non-json
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.warn("[MarketWS] WebSocket connection error");
+      };
+
+      socket.onclose = (event) => {
+        console.log(`[MarketWS] Closed with code ${event.code}.`);
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+
+        if (!isUnmountedRef.current) {
+          setStreamStatus("polling");
+          // Exponential backoff
+          const baseDelay = Math.min(15000, 1000 * Math.pow(1.5, retryCountRef.current));
+          const jitter = Math.random() * 500;
+          const delay = Math.round(baseDelay + jitter);
+          retryCountRef.current++;
+
+          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (!isUnmountedRef.current) {
+              setStreamStatus("reconnecting");
+              connectWs();
+            }
+          }, delay);
+        }
+      };
+    } catch (e) {
+      console.warn("[MarketWS] Instantiation error:", e);
+      setStreamStatus("polling");
+    }
+  };
+
   useEffect(() => {
+    isUnmountedRef.current = false;
+
+    // Initial fetch
     fetchLivePrices();
 
-    ws.current = new WebSocket(WS_URL);
-    ws.current.onmessage = (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.type === "MARKET_UPDATE") {
-        setTickerAnimate(true);
-        setTimeout(() => setTickerAnimate(false), 500);
+    // Start WebSocket
+    connectWs();
 
-        setMarketData((prev) => {
-          return prev.map(p => {
-            const update = payload.data.find((d: any) => d.crop_name === p.crop_name);
-            if (update) {
-              const newHistory = [...p.history];
-              if (newHistory.length > 30) newHistory.shift();
-              newHistory.push({ date: update.date, price: update.modal_price });
-
-              return {
-                ...p,
-                current_price: update.modal_price,
-                daily_change_pct: update.daily_change_pct,
-                trend: update.trend_direction,
-                demand: update.demand_score,
-                supply: update.supply_score,
-                volatility: update.volatility,
-                history: newHistory
-              };
-            }
-            return p;
-          });
-        });
+    // Resilient Fallback Polling: Polls live-prices every 5s if WebSocket is not open
+    pollIntervalRef.current = setInterval(() => {
+      if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+        fetchLivePricesQuietly();
       }
-    };
+    }, 5000);
 
     return () => {
-      if (ws.current) ws.current.close();
+      isUnmountedRef.current = true;
+      if (ws.current) {
+        ws.current.close();
+        ws.current = null;
+      }
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, []);
+
+  const fetchLivePricesQuietly = async () => {
+    try {
+      const res = await fetch(`${AI_ENGINE_URL}/api/market/live-prices`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setMarketData((prev) => {
+            if (prev.length === 0) return data;
+            return prev.map((p) => {
+              const u = data.find((d: any) => d.crop_name === p.crop_name);
+              return u ? { ...p, current_price: u.current_price, daily_change_pct: u.daily_change_pct, trend: u.trend } : p;
+            });
+          });
+        }
+      }
+    } catch (e) {
+      // quiet fallback
+    }
+  };
 
   const fetchLivePrices = async () => {
     try {
@@ -166,13 +293,22 @@ const MarketInsights = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="border-primary text-primary font-bold tracking-widest uppercase bg-primary/5">
-              Live Feed Active
-            </Badge>
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
+            {streamStatus === "connected" ? (
+              <Badge variant="outline" className="border-emerald-500 text-emerald-600 font-bold tracking-wider uppercase bg-emerald-500/10 gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Live Stream (WebSocket)
+              </Badge>
+            ) : streamStatus === "reconnecting" ? (
+              <Badge variant="outline" className="border-amber-500 text-amber-600 font-bold tracking-wider uppercase bg-amber-500/10 gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                Reconnecting Stream...
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-sky-500 text-sky-600 font-bold tracking-wider uppercase bg-sky-500/10 gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+                Live Feed (Auto-Sync)
+              </Badge>
+            )}
           </div>
           <h1 className="text-3xl font-display font-black text-foreground mt-2">AgriAssist Market Intelligence</h1>
           <p className="text-muted-foreground mt-1">Real-time agriculture stock trading & predictive algorithms</p>

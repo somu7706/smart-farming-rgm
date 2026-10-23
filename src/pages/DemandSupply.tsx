@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useAuth } from "@/hooks/useAuth";
 import { BarChart3, AlertCircle, ArrowRight, CheckCircle, MapPin, TrendingUp, Star, Loader2, Package, Users, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,9 +64,28 @@ const DemandSupply = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    // Fetch farmer profiles with regions
-    const { data: farmers } = await supabase.rpc("get_public_farmer_profiles");
-    const { data: details } = await supabase.from("farmer_details").select("*");
+    // Fetch farmer profiles with regions (MongoDB with Supabase fallback)
+    let farmersList: any[] = [];
+    let detailsList: any[] = [];
+    try {
+      const mongoFarmers = await api.get<any[]>("/profile/farmers");
+      if (mongoFarmers && mongoFarmers.length > 0) {
+        farmersList = mongoFarmers.map(f => ({ id: f.id, full_name: f.full_name, region: f.region }));
+        detailsList = mongoFarmers.map(f => ({ user_id: f.id, total_yield: f.total_yield, primary_crop: f.primary_crop }));
+      }
+    } catch (e) {
+      // fallback
+    }
+
+    if (farmersList.length === 0) {
+      const { data: supaFarmers } = await supabase.rpc("get_public_farmer_profiles");
+      const { data: supaDetails } = await supabase.from("farmer_details").select("*");
+      farmersList = supaFarmers || [];
+      detailsList = supaDetails || [];
+    }
+
+    const farmers = farmersList;
+    const details = detailsList;
     const { data: orders } = await supabase.from("orders").select("*");
 
     if (farmers && details) {
@@ -155,6 +176,14 @@ const DemandSupply = () => {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  useRealtimeSync("farmer_profile", () => {
+    fetchData();
+  });
+
+  useRealtimeSync("product", () => {
+    fetchData();
+  });
 
   const handleCommit = async () => {
     if (!user || !selectedDemand || !commitmentQuantity) return;

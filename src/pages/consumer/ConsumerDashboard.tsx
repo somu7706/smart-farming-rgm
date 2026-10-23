@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,19 +18,32 @@ const ConsumerDashboard = () => {
     try {
       console.log("Fetching consumer dashboard data");
 
-      const { data: prof } = await supabase.from("profiles").select("full_name, region").eq("id", user.id).single();
-      if (prof) setProfile(prof);
+      let fCount = 0;
+      let pCount = 0;
+      let avg = 0;
 
-      // Count available crops
-      const { count: cropCount } = await supabase.from("crops").select("*", { count: "exact", head: true });
-
-      // Average market price
-      const { data: prices } = await supabase.from("market_prices").select("price");
-      const avg = prices && prices.length > 0 ? prices.reduce((s: number, p: any) => s + Number(p.price), 0) / prices.length : 0;
-
-      // Count farmer profiles using secure RPC
-      const { data: farmerCountData } = await supabase.rpc("count_farmers");
-      const farmerCount = farmerCountData ?? 0;
+      try {
+        const [prof, prodRes, farmers] = await Promise.all([
+          api.get<any>("/profile"),
+          api.get<any>("/products"),
+          api.get<any[]>("/profile/farmers"),
+        ]);
+        if (prof) setProfile({ full_name: prof.fullName || prof.full_name, region: prof.region });
+        pCount = prodRes?.total || prodRes?.products?.length || 0;
+        fCount = farmers?.length || 0;
+        if (prodRes?.products && prodRes.products.length > 0) {
+          avg = prodRes.products.reduce((s: number, p: any) => s + Number(p.expected_price || 0), 0) / prodRes.products.length;
+        }
+      } catch (e) {
+        const { data: prof } = await supabase.from("profiles").select("full_name, region").eq("id", user.id).single();
+        if (prof) setProfile(prof);
+        const { count: cropCount } = await supabase.from("crops").select("*", { count: "exact", head: true });
+        pCount = cropCount ?? 0;
+        const { data: prices } = await supabase.from("market_prices").select("price");
+        avg = prices && prices.length > 0 ? prices.reduce((s: number, p: any) => s + Number(p.price), 0) / prices.length : 0;
+        const { data: farmerCountData } = await supabase.rpc("count_farmers");
+        fCount = farmerCountData ?? 0;
+      }
 
       // Count my active orders
       const { count: myOrderCount } = await supabase
@@ -40,9 +55,9 @@ const ConsumerDashboard = () => {
       console.log("Consumer stats:", { cropCount, avg, farmerCount, myOrderCount });
 
       setStats({
-        products: cropCount ?? 0,
+        products: pCount,
         avgPrice: Math.round(avg * 100) / 100,
-        farmers: farmerCount ?? 0,
+        farmers: fCount,
         myOrders: myOrderCount ?? 0,
       });
     } catch (err) {
@@ -61,6 +76,15 @@ const ConsumerDashboard = () => {
 
     return () => { supabase.removeChannel(channel); };
   }, [user]);
+
+  // Real-time synchronization for products and farmer profiles
+  useRealtimeSync("product", () => {
+    fetchData();
+  });
+
+  useRealtimeSync("farmer_profile", () => {
+    fetchData();
+  });
 
   const cards = [
     { label: "Available Products", value: stats.products, icon: ShoppingCart, color: "text-primary" },

@@ -64,24 +64,39 @@ Base.metadata.create_all(bind=engine)
 
 router = APIRouter()
 
+import logging
+logger = logging.getLogger("market_engine")
+
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: set[WebSocket] = set()
+        self.latest_cache = None
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections.add(websocket)
+        logger.info(f"WebSocket client connected. Total active clients: {len(self.active_connections)}")
+        # Send latest cache immediately if available
+        if self.latest_cache:
+            try:
+                await websocket.send_text(json.dumps({"type": "MARKET_UPDATE", "data": self.latest_cache}))
+            except Exception as e:
+                logger.warning(f"Failed to send initial market state: {e}")
 
     def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+        self.active_connections.discard(websocket)
+        logger.info(f"WebSocket client disconnected. Total active clients: {len(self.active_connections)}")
 
     async def broadcast(self, message: str):
-        for connection in self.active_connections:
+        dead_connections = []
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(message)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error sending message to client: {e}. Marking for removal.")
+                dead_connections.append(connection)
+        for dc in dead_connections:
+            self.active_connections.discard(dc)
 
 manager = ConnectionManager()
 
@@ -174,28 +189,58 @@ def update_market_data():
         if loop and loop.is_running():
             asyncio.run_coroutine_threadsafe(manager.broadcast(json.dumps({"type": "MARKET_UPDATE", "data": latest_data})), loop)
 
-scheduler = AsyncIOScheduler()
-scheduler.add_job(update_market_data, 'interval', seconds=5) # Real-time every 5 seconds for visual effect
+market_task = None
+
+async def market_update_loop():
+    logger.info("Market data background update loop started.")
+    while True:
+        try:
+            latest_data = update_market_data()
+            if latest_data:
+                manager.latest_cache = latest_data
+                if manager.active_connections:
+                    await manager.broadcast(json.dumps({"type": "MARKET_UPDATE", "data": latest_data}))
+        except Exception as e:
+            logger.error(f"Error in market update cycle: {e}")
+        await asyncio.sleep(5)
 
 def start_scheduler():
+    global market_task
     try:
-        if not scheduler.running:
-            scheduler.start()
-            print("Market data scheduler started successfully.")
+        loop = asyncio.get_event_loop()
+        if loop.is_running() and (market_task is None or market_task.done()):
+            market_task = asyncio.create_task(market_update_loop())
+            print("Market data async update loop started successfully.")
     except Exception as e:
-        print(f"Warning: Failed to start scheduler: {e}")
+        print(f"Note on starting market engine loop: {e}")
 
 @router.on_event("startup")
-def on_startup():
-    start_scheduler()
+async def on_startup():
+    global market_task
+    if market_task is None or market_task.done():
+        market_task = asyncio.create_task(market_update_loop())
+        logger.info("Market data async update task spawned on startup.")
+
+@router.on_event("shutdown")
+async def on_shutdown():
+    global market_task
+    if market_task and not market_task.done():
+        market_task.cancel()
+        logger.info("Market data async update task cancelled on shutdown.")
 
 @router.websocket("/ws/market-stream")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            await websocket.receive_text()
+            text = await websocket.receive_text()
+            # Handle client keepalive heartbeat ping
+            if text == "ping" or "ping" in text:
+                await websocket.send_text(json.dumps({"type": "pong", "time": datetime.utcnow().isoformat()}))
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.warning(f"WebSocket client exception: {e}")
         manager.disconnect(websocket)
 
 class PredictionRequest(BaseModel):

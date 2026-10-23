@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useAuth } from "@/hooks/useAuth";
 import MarketplaceStats from "@/components/marketplace/MarketplaceStats";
 import MarketplaceFilters from "@/components/marketplace/MarketplaceFilters";
@@ -48,21 +50,73 @@ const Marketplace = () => {
   // Get consumer location
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("latitude, longitude").eq("id", user.id).single().then(({ data }) => {
-      if (data?.latitude && data?.longitude) setConsumerLoc({ lat: data.latitude, lng: data.longitude });
+    api.get<any>("/profile").then((prof) => {
+      if (prof?.latitude && prof?.longitude) {
+        setConsumerLoc({ lat: prof.latitude, lng: prof.longitude });
+      } else {
+        supabase.from("profiles").select("latitude, longitude").eq("id", user.id).single().then(({ data }) => {
+          if (data?.latitude && data?.longitude) setConsumerLoc({ lat: data.latitude, lng: data.longitude });
+        });
+      }
+    }).catch(() => {
+      supabase.from("profiles").select("latitude, longitude").eq("id", user.id).single().then(({ data }) => {
+        if (data?.latitude && data?.longitude) setConsumerLoc({ lat: data.latitude, lng: data.longitude });
+      });
     });
   }, [user]);
 
   // Fetch data
   const fetchData = useCallback(async () => {
     setLoading(true);
+    try {
+      // 1. Fetch products from MongoDB
+      const prodRes = await api.get<any>("/products");
+      const mongoProducts = prodRes?.products || [];
+
+      // 2. Fetch order counts from Supabase orders table
+      const { data: orders } = await supabase.from("orders").select("crop_name");
+      const counts: Record<string, number> = {};
+      (orders || []).forEach((o: any) => { counts[o.crop_name] = (counts[o.crop_name] || 0) + 1; });
+      setOrderCounts(counts);
+
+      if (mongoProducts.length > 0) {
+        const mapped: MarketCrop[] = mongoProducts.map((p: any) => {
+          let distance_km: number | null = null;
+          if (consumerLoc && p.latitude && p.longitude) {
+            distance_km = haversine(consumerLoc.lat, consumerLoc.lng, p.latitude, p.longitude);
+          }
+          return {
+            farmer_id: p.farmer_id || p.id,
+            farmer_name: p.farmer_name,
+            region: p.region,
+            crop_name: p.crop_name,
+            total_yield: p.total_yield,
+            expected_price: p.expected_price,
+            farming_type: p.farming_type,
+            latitude: p.latitude,
+            longitude: p.longitude,
+            demand_level: (counts[p.crop_name] || 0) >= 3 ? ("high" as const) : ("stable" as const),
+            distance_km,
+          };
+        });
+
+        setItems(mapped);
+        const max = Math.max(...mapped.map((i) => i.expected_price), 100);
+        setPriceRange([0, max]);
+        setLoading(false);
+        return;
+      }
+    } catch (apiErr) {
+      console.warn("MongoDB products fetch error, fallback to Supabase:", apiErr);
+    }
+
+    // Fallback to Supabase if MongoDB empty
     const { data: profiles } = await supabase.rpc("get_public_farmer_profiles");
     if (!profiles?.length) { setLoading(false); return; }
 
     const { data: details } = await supabase.from("farmer_details").select("*");
     const detailsMap = new Map((details || []).map((d: any) => [d.user_id, d]));
 
-    // Fetch order counts per crop_name
     const { data: orders } = await supabase.from("orders").select("crop_name");
     const counts: Record<string, number> = {};
     (orders || []).forEach((o: any) => { counts[o.crop_name] = (counts[o.crop_name] || 0) + 1; });
@@ -102,11 +156,25 @@ const Marketplace = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Realtime subscription for price changes
+  // End-to-End Realtime Sync for Farmer & Product Updates
+  useRealtimeSync("product", (event) => {
+    console.log("[Marketplace] Real-time product sync event:", event);
+    fetchData();
+  });
+
+  useRealtimeSync("farmer_profile", (event) => {
+    console.log("[Marketplace] Real-time farmer profile sync event:", event);
+    fetchData();
+  });
+
+  // Supabase Realtime for order and farmer_details updates
   useEffect(() => {
     const channel = supabase
       .channel("farmer_details_realtime")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "farmer_details" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "farmer_details" }, () => {
+        fetchData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
         fetchData();
       })
       .subscribe();
