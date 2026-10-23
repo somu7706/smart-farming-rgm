@@ -39,6 +39,34 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Diagnostics: Test live email delivery
+app.get("/api/test-email", async (req, res) => {
+  const { to } = req.query;
+  const targetEmail = to || "somu7075267357@gmail.com";
+  try {
+    const { transporter } = await import("./config/mail.js");
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
+      to: targetEmail,
+      subject: "AgriAssist SMTP Live Delivery Test",
+      text: "Testing outbound email directly from Render backend to " + targetEmail,
+    });
+    return res.json({
+      success: true,
+      deliveredTo: targetEmail,
+      messageId: info.messageId,
+      response: info.response,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+      configuredUser: process.env.GMAIL_USER || process.env.EMAIL_USER || "NOT_SET",
+      hasPassword: !!(process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS),
+    });
+  }
+});
+
 // Mount Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
