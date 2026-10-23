@@ -146,24 +146,25 @@ export const register = async (req, res) => {
       });
     }
 
-    // Send verification email via Nodemailer asynchronously in background (zero UI latency)
-    const baseUrl = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "http://localhost:8080";
+    // Send verification email via Nodemailer
+    const baseUrl = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "https://smart-farming-rgm.vercel.app";
     const verificationUrl = `${baseUrl}/auth/verify-email?token=${rawVerificationToken}`;
     
-    transporter.sendMail({
-      from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
-      to: newUser.email,
-      subject: "Verify your AgriAssist Account",
-      html: getVerificationEmailHtml({
-        name: fullName,
-        verificationUrl,
-        ttlMinutes: Math.round(ttlSeconds / 60),
-      }),
-    }).then(() => {
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
+        to: newUser.email,
+        subject: "Verify your AgriAssist Account",
+        html: getVerificationEmailHtml({
+          name: fullName,
+          verificationUrl,
+          ttlMinutes: Math.round(ttlSeconds / 60),
+        }),
+      });
       console.log(`[Email] Verification email delivered to ${newUser.email}`);
-    }).catch((emailErr) => {
-      console.error("[Email] Background email send error:", emailErr.message);
-    });
+    } catch (emailErr) {
+      console.error("[Email] Verification email send error:", emailErr.message);
+    }
 
     return res.status(201).json({
       success: true,
@@ -266,20 +267,21 @@ export const resendVerification = async (req, res) => {
       if (c) profileName = c.fullName;
     }
 
-    transporter.sendMail({
-      from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
-      to: user.email,
-      subject: "Verify your AgriAssist Account (New Link)",
-      html: getVerificationEmailHtml({
-        name: profileName,
-        verificationUrl,
-        ttlMinutes: Math.round(ttlSeconds / 60),
-      }),
-    }).then(() => {
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: "Verify your AgriAssist Account (New Link)",
+        html: getVerificationEmailHtml({
+          name: profileName,
+          verificationUrl,
+          ttlMinutes: Math.round(ttlSeconds / 60),
+        }),
+      });
       console.log(`[Email] Resent verification email to ${user.email}`);
-    }).catch((err) => {
+    } catch (err) {
       console.error("[Email] Resend email error:", err.message);
-    });
+    }
 
     return res.status(200).json({
       message: "If an unverified account exists with that email, a verification link has been sent.",
@@ -379,20 +381,21 @@ export const forgotPassword = async (req, res) => {
         if (c) profileName = c.fullName;
       }
 
-      transporter.sendMail({
-        from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
-        to: user.email,
-        subject: "Reset your AgriAssist Password",
-        html: getPasswordResetEmailHtml({
-          name: profileName,
-          resetUrl,
-          ttlMinutes: Math.round(ttlSeconds / 60),
-        }),
-      }).then(() => {
-        console.log(`[Email] Password reset link sent to ${user.email}`);
-      }).catch((err) => {
+      try {
+        await transporter.sendMail({
+          from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: "Reset your AgriAssist Password",
+          html: getPasswordResetEmailHtml({
+            name: profileName,
+            resetUrl,
+            ttlMinutes: Math.round(ttlSeconds / 60),
+          }),
+        });
+        console.log(`[Email] Password reset link delivered to ${user.email}`);
+      } catch (err) {
         console.error("[Email] Password reset email error:", err.message);
-      });
+      }
       return res.status(200).json({
         message: "If an account with that email exists, we have sent a password reset link to it.",
         resetUrl: resetUrl,
