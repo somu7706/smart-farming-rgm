@@ -147,7 +147,8 @@ export const register = async (req, res) => {
     }
 
     // Send verification email via Nodemailer
-    const verificationUrl = `${process.env.APP_BASE_URL || "http://localhost:8080"}/auth/verify-email?token=${rawVerificationToken}`;
+    const baseUrl = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "http://localhost:8080";
+    const verificationUrl = `${baseUrl}/auth/verify-email?token=${rawVerificationToken}`;
     try {
       await transporter.sendMail({
         from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER}>`,
@@ -253,7 +254,8 @@ export const resendVerification = async (req, res) => {
     user.lastVerificationEmailSentAt = new Date();
     await user.save();
 
-    const verificationUrl = `${process.env.APP_BASE_URL || "http://localhost:8080"}/auth/verify-email?token=${rawVerificationToken}`;
+    const baseUrl = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "http://localhost:8080";
+    const verificationUrl = `${baseUrl}/auth/verify-email?token=${rawVerificationToken}`;
 
     // Get profile name
     let profileName = "User";
@@ -365,7 +367,8 @@ export const forgotPassword = async (req, res) => {
       user.passwordResetExpires = new Date(Date.now() + ttlSeconds * 1000);
       await user.save();
 
-      const resetUrl = `${process.env.APP_BASE_URL || "http://localhost:8080"}/auth/reset-password?token=${rawResetToken}`;
+      const baseUrl = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "http://localhost:8080";
+      const resetUrl = `${baseUrl}/auth/reset-password?token=${rawResetToken}`;
 
       let profileName = "User";
       if (user.role === "farmer") {
