@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "https://smart-farming-rgm.onrender.com/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "https://agriassist-backend-x72r.onrender.com/api";
 
 export interface ApiResponse<T = any> {
   success?: boolean;
