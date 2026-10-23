@@ -69,8 +69,8 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: "An account with this email already exists." });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Hash password (standard 10 rounds for high security + instant response)
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Generate single-use verification token
     const rawVerificationToken = crypto.randomBytes(32).toString("hex");
@@ -146,25 +146,24 @@ export const register = async (req, res) => {
       });
     }
 
-    // Send verification email via Nodemailer
+    // Send verification email via Nodemailer asynchronously in background (zero UI latency)
     const baseUrl = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "http://localhost:8080";
     const verificationUrl = `${baseUrl}/auth/verify-email?token=${rawVerificationToken}`;
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER}>`,
-        to: newUser.email,
-        subject: "Verify your AgriAssist Account",
-        html: getVerificationEmailHtml({
-          name: fullName,
-          verificationUrl,
-          ttlMinutes: Math.round(ttlSeconds / 60),
-        }),
-      });
-      console.log(`[Email] Verification email sent to ${newUser.email}`);
-    } catch (emailErr) {
-      console.error("[Email] Failed to send verification email:", emailErr.message);
-      // We don't fail registration, but inform user they can resend
-    }
+    
+    transporter.sendMail({
+      from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
+      to: newUser.email,
+      subject: "Verify your AgriAssist Account",
+      html: getVerificationEmailHtml({
+        name: fullName,
+        verificationUrl,
+        ttlMinutes: Math.round(ttlSeconds / 60),
+      }),
+    }).then(() => {
+      console.log(`[Email] Verification email delivered to ${newUser.email}`);
+    }).catch((emailErr) => {
+      console.error("[Email] Background email send error:", emailErr.message);
+    });
 
     return res.status(201).json({
       success: true,
@@ -267,8 +266,8 @@ export const resendVerification = async (req, res) => {
       if (c) profileName = c.fullName;
     }
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER}>`,
+    transporter.sendMail({
+      from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
       to: user.email,
       subject: "Verify your AgriAssist Account (New Link)",
       html: getVerificationEmailHtml({
@@ -276,6 +275,10 @@ export const resendVerification = async (req, res) => {
         verificationUrl,
         ttlMinutes: Math.round(ttlSeconds / 60),
       }),
+    }).then(() => {
+      console.log(`[Email] Resent verification email to ${user.email}`);
+    }).catch((err) => {
+      console.error("[Email] Resend email error:", err.message);
     });
 
     return res.status(200).json({
@@ -379,8 +382,8 @@ export const forgotPassword = async (req, res) => {
         if (c) profileName = c.fullName;
       }
 
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER}>`,
+      transporter.sendMail({
+        from: process.env.EMAIL_FROM || `"AgriAssist" <${process.env.GMAIL_USER || process.env.EMAIL_USER}>`,
         to: user.email,
         subject: "Reset your AgriAssist Password",
         html: getPasswordResetEmailHtml({
@@ -388,9 +391,11 @@ export const forgotPassword = async (req, res) => {
           resetUrl,
           ttlMinutes: Math.round(ttlSeconds / 60),
         }),
+      }).then(() => {
+        console.log(`[Email] Password reset link sent to ${user.email}`);
+      }).catch((err) => {
+        console.error("[Email] Password reset email error:", err.message);
       });
-
-      console.log(`[Email] Password reset link sent to ${user.email}`);
     }
 
     // Always generic message to prevent account enumeration
