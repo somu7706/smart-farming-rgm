@@ -91,6 +91,7 @@ export const AddressSelector = ({
     lat: null,
     lng: null,
   });
+  const [autofilledLocation, setAutofilledLocation] = useState<string | null>(null);
 
   const fetchAddresses = useCallback(async () => {
     try {
@@ -137,6 +138,7 @@ export const AddressSelector = ({
     setInstructions("");
     setIsDefault(addresses.length === 0);
     setCoords({ lat: null, lng: null });
+    setAutofilledLocation(null);
     setShowModal(true);
   };
 
@@ -155,18 +157,34 @@ export const AddressSelector = ({
     setInstructions(addr.instructions || "");
     setIsDefault(addr.isDefault || false);
     setCoords({ lat: addr.latitude || null, lng: addr.longitude || null });
+    setAutofilledLocation(null);
     setShowModal(true);
   };
 
-  // Called when user pins a location or searches on the embedded map
-  const handleMapLocationSelect = (geo: GeocodedAddress) => {
+  // Called whenever user searches, selects an autocomplete prediction, clicks the map, drags marker, or uses GPS
+  const handleMapLocationSelect = useCallback((geo: GeocodedAddress) => {
     setCoords({ lat: geo.lat, lng: geo.lng });
-    if (geo.city && !city) setCity(geo.city);
-    if (geo.district && !district) setDistrict(geo.district);
-    if (geo.state && !state) setState(geo.state);
-    if (geo.pincode && !pincode) setPincode(geo.pincode);
-    if (geo.street && !street) setStreet(geo.street);
-  };
+
+    // 1. Always update location-derived fields when a new map position is selected
+    if (geo.city) setCity(geo.city);
+    if (geo.district) setDistrict(geo.district);
+    if (geo.state) setState(geo.state);
+    if (geo.pincode) setPincode(geo.pincode);
+    if (geo.street) setStreet(geo.street);
+
+    // 2. Only overwrite houseNo if map provider specifically identified one
+    // (Never invent a house number, and preserve user's manual flat/house input if map returns nothing)
+    if (geo.houseNo) {
+      setHouseNo(geo.houseNo);
+    }
+
+    // 3. User feedback
+    const summary = [geo.street, geo.city, geo.district, geo.state].filter(Boolean).slice(0, 3).join(", ");
+    if (summary) {
+      setAutofilledLocation(summary);
+      toast.success(`Address updated from map: ${summary}`, { id: "map-autofill" });
+    }
+  }, []);
 
   const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -463,6 +481,22 @@ export const AddressSelector = ({
               />
             </div>
 
+            {/* Map Geolocation Autofill Status Banner */}
+            {coords.lat && coords.lng ? (
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="truncate">
+                    GPS Coordinates: <strong>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</strong>
+                    {city ? ` • ${city}, ${state}` : ""}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground shrink-0 hidden sm:inline-block">
+                  Fields auto-populated below
+                </span>
+              </div>
+            ) : null}
+
             {/* Recipient & Phone */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -500,6 +534,7 @@ export const AddressSelector = ({
                   placeholder="e.g. Flat 302, Green Valley Apartments"
                   required
                 />
+                <p className="text-[10px] text-muted-foreground">Door / Flat / Plot number (enter manually)</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Street / Locality / Village *</Label>
@@ -509,6 +544,7 @@ export const AddressSelector = ({
                   placeholder="e.g. Gandhi Road, Near Market Yard"
                   required
                 />
+                <p className="text-[10px] text-muted-foreground">Autofills from map; can be edited</p>
               </div>
             </div>
 
