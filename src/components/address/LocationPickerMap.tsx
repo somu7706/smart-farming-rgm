@@ -43,12 +43,25 @@ interface LocationPickerProps {
   height?: string;
 }
 
-// Controller to smoothly pan the map
+// Controller to smoothly pan the map and handle container resizing
 const MapController = ({ center }: { center: [number, number] }) => {
   const map = useMap();
   useEffect(() => {
     map.flyTo(center, Math.max(map.getZoom(), 15), { duration: 1.2 });
   }, [center, map]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+    const handleResize = () => map.invalidateSize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [map]);
+
   return null;
 };
 
@@ -217,14 +230,14 @@ export const LocationPickerMap = ({
 
   return (
     <div className="space-y-2">
-      {/* Search & GPS Controls */}
-      <div className="flex gap-2">
+      {/* Search & GPS Controls (Responsive Flex) */}
+      <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search village, city, locality, or 6-digit PIN"
-            className="text-xs h-9 pr-8"
+            className="text-xs h-9 pr-8 w-full"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -239,6 +252,7 @@ export const LocationPickerMap = ({
             onClick={handleSearch}
             disabled={searching}
             className="absolute right-1 top-1 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+            aria-label="Search location"
           >
             {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
           </Button>
@@ -249,16 +263,16 @@ export const LocationPickerMap = ({
           size="sm"
           onClick={handleUseCurrentLocation}
           disabled={locating}
-          className="text-xs h-9 gap-1 whitespace-nowrap"
+          className="text-xs h-9 gap-1.5 whitespace-nowrap shrink-0 justify-center"
         >
           {locating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5 text-primary" />}
-          My Location
+          <span>Use My Location</span>
         </Button>
       </div>
 
       {/* Embedded Leaflet Map */}
       <div
-        className="rounded-lg overflow-hidden border border-border shadow-inner relative"
+        className="rounded-lg overflow-hidden border border-border shadow-inner relative w-full min-w-0"
         style={{ height }}
       >
         <MapContainer
@@ -283,15 +297,15 @@ export const LocationPickerMap = ({
         </MapContainer>
 
         {/* Status / Instructions Overlay */}
-        <div className="absolute bottom-2 left-2 z-[400] flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-2 py-1 rounded text-[11px] shadow-sm border border-border/60">
-          <MapPin className="w-3 h-3 text-primary animate-pulse" />
+        <div className="absolute bottom-2 left-2 z-[400] flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-2 py-1 rounded text-[11px] shadow-sm border border-border/60 max-w-[70%] sm:max-w-[80%] truncate">
+          <MapPin className="w-3 h-3 text-primary shrink-0 animate-pulse" />
           {geocoding ? (
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <Loader2 className="w-3 h-3 animate-spin" /> Locating address...
+            <span className="flex items-center gap-1 text-muted-foreground truncate">
+              <Loader2 className="w-3 h-3 animate-spin shrink-0" /> Locating address...
             </span>
           ) : (
-            <span className="text-muted-foreground">
-              Tap map or drag marker to set exact delivery entrance
+            <span className="text-muted-foreground truncate">
+              Tap map or drag marker to set delivery entrance
             </span>
           )}
         </div>

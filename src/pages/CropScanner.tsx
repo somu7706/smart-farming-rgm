@@ -197,9 +197,9 @@ const CropScanner = () => {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center gap-3 mb-1">
-        <ScanLine className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display font-bold text-foreground">AI Crop Disease Scanner</h1>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+        <ScanLine className="w-6 h-6 text-primary shrink-0" />
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">AI Crop Disease Scanner</h1>
         <span className="px-2 py-0.5 bg-agri-amber/20 text-agri-amber text-[10px] font-bold uppercase rounded-full">Pro AI System</span>
       </div>
       <p className="text-sm text-muted-foreground mb-6">AI detects your crop and any disease automatically from the photo.</p>
@@ -369,7 +369,7 @@ const CropScanner = () => {
 
           {/* Camera Capture Modal */}
           <Dialog open={isCameraOpen} onOpenChange={setIsCameraOpen}>
-            <DialogContent className="sm:max-w-xl p-0 overflow-hidden bg-black border-none">
+            <DialogContent className="w-[95vw] sm:max-w-xl p-0 overflow-hidden bg-black border-none rounded-xl">
               <div className="relative aspect-video bg-black flex items-center justify-center">
                 <video
                   ref={videoRef}

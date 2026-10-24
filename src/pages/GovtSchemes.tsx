@@ -52,9 +52,9 @@ const GovtSchemes = () => {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center gap-3 mb-1">
-        <Landmark className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display font-bold text-foreground">Government Schemes (Sarkari Yojna)</h1>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+        <Landmark className="w-6 h-6 text-primary shrink-0" />
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Government Schemes (Sarkari Yojna)</h1>
         <span className="px-2 py-0.5 bg-agri-amber/20 text-agri-amber text-[10px] font-bold uppercase rounded-full">Official Links</span>
       </div>
       <p className="text-sm text-muted-foreground mb-6">Access real-time information and direct application links for major government agricultural schemes.</p>

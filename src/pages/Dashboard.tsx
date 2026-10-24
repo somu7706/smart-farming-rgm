@@ -192,8 +192,8 @@ const Dashboard = () => {
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Decision Score */}
-        <div className="lg:col-span-2 bg-card rounded-xl p-6 card-shadow border border-border">
-          <div className="flex items-center gap-4">
+        <div className="lg:col-span-2 bg-card rounded-xl p-5 sm:p-6 card-shadow border border-border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="font-display font-bold uppercase tracking-wide">Farmer Decision Score™</h3>
               <p className="text-sm text-muted-foreground">Status: <span className="text-primary font-semibold">{stats.alerts === 0 ? "EXCELLENT" : "NEEDS ATTENTION"}</span></p>
@@ -201,17 +201,17 @@ const Dashboard = () => {
                 📈 Based on real-time data
               </span>
             </div>
-            <div className="ml-auto flex flex-col items-center">
-              <div className="w-20 h-20 rounded-xl border-2 border-primary flex flex-col items-center justify-center">
-                <Heart className="w-4 h-4 text-primary mb-1" />
-                <span className="text-2xl font-display font-bold text-primary">
+            <div className="flex items-center gap-3 self-end sm:self-auto">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl border-2 border-primary flex flex-col items-center justify-center shrink-0">
+                <Heart className="w-4 h-4 text-primary mb-0.5" />
+                <span className="text-xl sm:text-2xl font-display font-bold text-primary">
                   {stats.alerts === 0 ? "100%" : `${Math.max(0, 100 - stats.alerts * 10)}%`}
                 </span>
               </div>
+              <button className="px-3 py-1.5 rounded-lg border border-border text-xs sm:text-sm text-muted-foreground hover:bg-muted">
+                WHY? <ChevronDown className="w-3 h-3 inline ml-0.5" />
+              </button>
             </div>
-            <button className="ml-4 px-3 py-1.5 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted">
-              WHY? <ChevronDown className="w-3 h-3 inline ml-1" />
-            </button>
           </div>
         </div>
 
@@ -246,7 +246,7 @@ const Dashboard = () => {
               <p className="text-sm font-medium text-foreground">"Learning together"</p>
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: "Crops", value: `${stats.totalCrops} registered`, color: "bg-primary" },
               { label: "Revenue", value: `₹${stats.revenue.toLocaleString()}`, color: "bg-agri-blue" },

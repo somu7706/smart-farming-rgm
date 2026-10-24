@@ -405,19 +405,19 @@ const FarmerOrders = () => {
               }
             >
               <CardContent className="py-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-bold text-foreground">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs sm:text-sm font-bold text-foreground">
                       Order #{order.orderNumber || order.id.slice(0, 8).toUpperCase()}
                     </span>
-                    <span className="text-xs text-muted-foreground ml-2">
+                    <span className="text-[11px] sm:text-xs text-muted-foreground">
                       <Clock className="w-3 h-3 inline mr-1" />
                       {new Date(order.created_at).toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                     {activeTrackingOrderRef.current === order.id && (
-                      <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                      <span className="flex items-center gap-1 text-[11px] sm:text-xs text-primary font-medium">
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
@@ -425,51 +425,53 @@ const FarmerOrders = () => {
                         Live GPS Active
                       </span>
                     )}
-                    <Badge variant={getStatusBadgeVariant(order.status)}>
+                    <Badge variant={getStatusBadgeVariant(order.status)} className="capitalize text-[10px] sm:text-xs">
                       {order.status.replace(/_/g, " ")}
                     </Badge>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm bg-muted/40 p-2.5 rounded-lg">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs sm:text-sm bg-muted/40 p-2.5 rounded-lg">
                   <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-muted-foreground" />
+                    <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span className="font-medium truncate">{order.consumer_name}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Wheat className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span>{order.crop_name}</span>
+                    <Wheat className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">{order.crop_name}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-muted-foreground" />
+                    <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span>{order.quantity} kg</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <IndianRupee className="w-3.5 h-3.5 text-muted-foreground" />
+                    <IndianRupee className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span className="font-bold text-foreground">₹{order.total_price}</span>
                   </div>
                 </div>
 
                 {/* Additional Delivery & Contact details */}
-                <div className="flex flex-wrap items-center justify-between text-xs text-muted-foreground gap-2">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-muted-foreground gap-3 pt-1 border-t border-border/40">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-wrap">
                     {order.consumer_phone && (
-                      <span className="flex items-center gap-1 text-foreground/80">
+                      <span className="flex items-center gap-1 text-foreground/80 font-medium">
                         <Phone className="w-3 h-3 text-muted-foreground" /> {order.consumer_phone}
                       </span>
                     )}
                     {order.delivery_address && (
-                      <span className="flex items-center gap-1 text-foreground/80">
-                        <Home className="w-3 h-3 text-muted-foreground" /> {order.delivery_address}
+                      <span className="flex items-center gap-1 text-foreground/80 line-clamp-1 max-w-md">
+                        <Home className="w-3 h-3 text-muted-foreground shrink-0" /> {order.delivery_address}
                       </span>
                     )}
                   </div>
                   {order.rejection_reason && (
-                    <span className="text-destructive font-medium">
+                    <span className="text-destructive font-medium text-xs">
                       Reason: {order.rejection_reason}
                     </span>
                   )}
-                  {renderActions(order)}
+                  <div className="w-full sm:w-auto flex justify-end">
+                    {renderActions(order)}
+                  </div>
                 </div>
               </CardContent>
             </Card>

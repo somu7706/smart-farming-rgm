@@ -10,14 +10,14 @@ interface StatsProps {
 }
 
 const StatCard = ({ icon: Icon, label, value, loading }: { icon: any; label: string; value: string; loading: boolean }) => (
-  <Card>
-    <CardContent className="flex items-center gap-3 py-4">
-      <div className="rounded-lg bg-primary/10 p-2.5">
-        <Icon className="w-5 h-5 text-primary" />
+  <Card className="min-w-0">
+    <CardContent className="flex items-center gap-2 sm:gap-3 p-3 sm:py-4">
+      <div className="rounded-lg bg-primary/10 p-2 sm:p-2.5 shrink-0">
+        <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
       </div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-lg font-bold text-foreground">
+      <div className="min-w-0">
+        <p className="text-[11px] sm:text-xs text-muted-foreground truncate">{label}</p>
+        <p className="text-sm sm:text-lg font-bold text-foreground truncate">
           {loading ? "..." : value}
         </p>
       </div>
@@ -26,7 +26,7 @@ const StatCard = ({ icon: Icon, label, value, loading }: { icon: any; label: str
 );
 
 const MarketplaceStats = ({ totalCrops, avgPrice, activeFarmers, totalQuantity, loading }: StatsProps) => (
-  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
     <StatCard icon={Wheat} label="Available Crops" value={String(totalCrops)} loading={loading} />
     <StatCard icon={IndianRupee} label="Avg Price / kg" value={`₹${avgPrice.toFixed(0)}`} loading={loading} />
     <StatCard icon={Users} label="Active Farmers" value={String(activeFarmers)} loading={loading} />

@@ -351,10 +351,10 @@ export const AddressSelector = ({
                 }`}
               >
                 <CardContent className="p-3.5 space-y-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span
-                        className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                           isSelected ? "border-primary bg-primary text-white" : "border-muted-foreground"
                         }`}
                       >
@@ -374,13 +374,13 @@ export const AddressSelector = ({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
                       {!addr.isDefault && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                           onClick={(e) => handleSetDefault(e, addr.id)}
                         >
                           Set Default
@@ -390,23 +390,25 @@ export const AddressSelector = ({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                        aria-label="Edit address"
                         onClick={(e) => {
                           e.stopPropagation();
                           openEditModal(addr);
                         }}
                       >
-                        <Edit2 className="w-3 h-3" />
+                        <Edit2 className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                        aria-label="Delete address"
                         disabled={deletingId === addr.id}
                         onClick={(e) => handleDeleteAddress(e, addr.id)}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -436,7 +438,7 @@ export const AddressSelector = ({
 
       {/* Add / Edit Delivery Address Modal */}
       <Dialog open={showModal} onOpenChange={(open) => { if (!open) setShowModal(false); }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-primary" />
@@ -532,8 +534,8 @@ export const AddressSelector = ({
               </div>
             </div>
 
-            {/* City, District, State */}
-            <div className="grid grid-cols-3 gap-2">
+            {/* City, District, State (Responsive Reflow) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div className="space-y-1.5">
                 <Label className="text-xs">City / Town *</Label>
                 <Input

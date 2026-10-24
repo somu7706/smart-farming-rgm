@@ -162,44 +162,44 @@ const MyOrders = () => {
               className="cursor-pointer hover:shadow-md transition-all border hover:border-primary/50 group"
               onClick={() => navigate(`/consumer/orders/${order.id}`)}
             >
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-foreground">
+              <CardContent className="py-3.5 sm:py-4 px-3.5 sm:px-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs sm:text-sm font-bold text-foreground">
                       Order #{order.orderNumber || order.id.slice(0, 8).toUpperCase()}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3 inline mr-1" />
+                    <span className="text-[11px] sm:text-xs text-muted-foreground">
+                      <Clock className="w-3 h-3 inline mr-0.5" />
                       {new Date(order.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                     {order.status === "out_for_delivery" && (
-                      <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                      <span className="flex items-center gap-1 text-[11px] sm:text-xs text-primary font-medium">
                         <Truck className="w-3.5 h-3.5 animate-bounce" /> Live Tracking
                       </span>
                     )}
-                    <Badge variant={getStatusColor(order.status)}>
+                    <Badge variant={getStatusColor(order.status)} className="capitalize text-[10px] sm:text-xs">
                       {order.status.replace(/_/g, " ")}
                     </Badge>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    <Wheat className="w-4 h-4 text-primary" />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <Wheat className="w-4 h-4 text-primary shrink-0" />
                     <span className="font-medium text-foreground">{order.crop_name}</span>
-                    <span className="text-muted-foreground">• {order.quantity} kg</span>
+                    <span className="text-muted-foreground text-xs">• {order.quantity} kg</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <IndianRupee className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="font-bold text-foreground text-base">₹{order.total_price}</span>
+                    <span className="font-bold text-foreground text-sm sm:text-base">₹{order.total_price}</span>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-xs text-muted-foreground mt-2 pt-2 border-t">
-                  <span>Farmer: <strong className="text-foreground/80 font-medium">{order.farmer_name}</strong></span>
-                  <span className="flex items-center text-primary group-hover:translate-x-0.5 transition-transform font-medium">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center text-xs text-muted-foreground mt-2 pt-2 border-t gap-1">
+                  <span className="truncate">Farmer: <strong className="text-foreground/80 font-medium">{order.farmer_name}</strong></span>
+                  <span className="flex items-center text-primary group-hover:translate-x-0.5 transition-transform font-medium shrink-0">
                     View Tracking Details <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
                   </span>
                 </div>

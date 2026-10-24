@@ -317,7 +317,7 @@ const DemandSupply = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border overflow-x-auto">
+      <div className="flex border-b border-border overflow-x-auto scrollbar-hide -mx-3 sm:mx-0 px-3 sm:px-0">
         {[
           { key: "market_demand" as const, label: "Market Demand", icon: Package },
           { key: "regions" as const, label: "High Demand Regions", icon: TrendingUp },
@@ -326,10 +326,10 @@ const DemandSupply = () => {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`flex items-center gap-2 px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
           >
-            <t.icon className="w-4 h-4" /> {t.label}
+            <t.icon className="w-4 h-4 shrink-0" /> {t.label}
           </button>
         ))}
       </div>
@@ -474,7 +474,7 @@ const DemandSupply = () => {
 
       {/* Commitment Modal */}
       <Dialog open={!!selectedDemand} onOpenChange={(open) => !open && setSelectedDemand(null)}>
-        <DialogContent className="sm:max-w-[440px]">
+        <DialogContent className="w-[95vw] sm:max-w-[440px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Commit to Production</DialogTitle>
             <DialogDescription>
@@ -536,9 +536,9 @@ const DemandSupply = () => {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedDemand(null)}>Cancel</Button>
-            <Button onClick={handleCommit} disabled={committing || !commitmentQuantity}>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setSelectedDemand(null)}>Cancel</Button>
+            <Button className="w-full sm:w-auto" onClick={handleCommit} disabled={committing || !commitmentQuantity}>
               {committing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Confirm Commitment"}
             </Button>
           </DialogFooter>

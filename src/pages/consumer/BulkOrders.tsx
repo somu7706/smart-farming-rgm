@@ -493,7 +493,7 @@ const BulkOrders = () => {
 
       {/* Create Bulk Order Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="w-5 h-5 text-primary" />
@@ -598,11 +598,11 @@ const BulkOrders = () => {
               </div>
             )}
 
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowForm(false)} disabled={submitting}>
+            <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)} disabled={submitting} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting || !selectedAddress}>
+              <Button type="submit" disabled={submitting || !selectedAddress} className="w-full sm:w-auto">
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Publishing...

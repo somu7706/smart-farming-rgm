@@ -206,7 +206,7 @@ const Register = () => {
                   <p className="text-xs text-muted-foreground">{locationStatus}</p>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>Primary Crop</Label>
                     <Select value={primaryCrop} onValueChange={setPrimaryCrop}>
@@ -308,7 +308,7 @@ const Register = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2 sm:col-span-2">
                     <Label>Harvest Cycle</Label>
                     <Select value={harvestCycle} onValueChange={setHarvestCycle}>
                       <SelectTrigger>

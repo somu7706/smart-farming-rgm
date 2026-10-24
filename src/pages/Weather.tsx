@@ -168,13 +168,13 @@ const Weather = () => {
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center gap-3">
-        <Cloud className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display font-bold text-agri-orange uppercase tracking-wide">Weather Intelligence Center</h1>
+        <Cloud className="w-6 h-6 text-primary shrink-0" />
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-agri-orange uppercase tracking-wide">Weather Intelligence Center</h1>
       </div>
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {region}</span>
-        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {today}</span>
-        <span className="ml-auto">Real-time weather data for smart farming decisions</span>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+        <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-primary" /> {region}</span>
+        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {today}</span>
+        <span className="hidden sm:inline-block ml-auto text-xs">Real-time weather data for smart farming decisions</span>
       </div>
 
       {loading ? (
@@ -197,27 +197,27 @@ const Weather = () => {
       ) : weather ? (
         <>
           {/* Current */}
-          <div className="agri-gradient-warm rounded-2xl p-8 text-primary-foreground grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="flex items-center gap-6">
-              <span className="text-6xl">{getWeatherEmoji(weather.current.weather_code)}</span>
+          <div className="agri-gradient-warm rounded-2xl p-5 sm:p-8 text-primary-foreground grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="flex items-center gap-4 sm:gap-6">
+              <span className="text-5xl sm:text-6xl">{getWeatherEmoji(weather.current.weather_code)}</span>
               <div>
                 <p className="text-xs uppercase tracking-wider opacity-80">Current Weather</p>
-                <p className="text-6xl font-display font-bold">{Math.round(weather.current.temperature)}°</p>
-                <p className="text-sm opacity-80">• {weather.current.condition}</p>
+                <p className="text-4xl sm:text-6xl font-display font-bold">{Math.round(weather.current.temperature)}°</p>
+                <p className="text-xs sm:text-sm opacity-80">• {weather.current.condition}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 bg-primary-foreground/10 rounded-xl p-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 bg-primary-foreground/10 rounded-xl p-3 sm:p-4">
               {[
                 { label: "Humidity", value: `${weather.current.humidity}%`, icon: Droplets },
                 { label: "Wind Speed", value: `${weather.current.wind_speed} km/h`, icon: Wind },
                 { label: "Feels Like", value: `${Math.round(weather.current.feels_like)}°C`, icon: Thermometer },
                 { label: "Location", value: weather.location.name, icon: Eye },
               ].map((i) => (
-                <div key={i.label} className="flex items-center gap-2">
-                  <i.icon className="w-4 h-4 opacity-80" />
-                  <div>
-                    <p className="text-[10px] uppercase opacity-70">{i.label}</p>
-                    <p className="font-display font-bold text-sm">{i.value}</p>
+                <div key={i.label} className="flex items-center gap-2 min-w-0">
+                  <i.icon className="w-4 h-4 opacity-80 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase opacity-70 truncate">{i.label}</p>
+                    <p className="font-display font-bold text-xs sm:text-sm truncate">{i.value}</p>
                   </div>
                 </div>
               ))}
@@ -225,7 +225,7 @@ const Weather = () => {
           </div>
 
           {/* 5-Day Forecast */}
-          <div className="bg-card rounded-xl p-6 card-shadow border border-border">
+          <div className="bg-card rounded-xl p-4 sm:p-6 card-shadow border border-border">
             <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">5-Day Forecast</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               {weather.forecast.map((day) => (

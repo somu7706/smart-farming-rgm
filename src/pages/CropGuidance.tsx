@@ -46,10 +46,10 @@ const SmartInput = ({ label, value, onChange, options, type = "text", placeholde
 
   return (
     <div className="space-y-1.5 p-3 border border-border/60 rounded-xl bg-card card-shadow transition-all group hover:border-primary/30">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
         <Label className="font-semibold text-foreground text-sm">{label}</Label>
-        <div className="flex items-center gap-2 bg-muted/50 px-2 py-1 rounded-md border border-border/50">
-          <Label className="text-[10px] text-muted-foreground uppercase cursor-pointer" onClick={() => setIsManual(!isManual)}>Manual Entry</Label>
+        <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-0.5 rounded-md border border-border/50">
+          <Label className="text-[10px] text-muted-foreground uppercase cursor-pointer" onClick={() => setIsManual(!isManual)}>Manual</Label>
           <Switch checked={isManual} onCheckedChange={setIsManual} className="scale-75 origin-right m-0" />
         </div>
       </div>
@@ -116,15 +116,15 @@ const CropGuidance = () => {
         <p className="text-sm text-muted-foreground mt-1">Science-backed machine learning strategies</p>
       </div>
 
-      <div className="flex border-b border-border overflow-x-auto justify-start md:justify-center scrollbar-hide">
+      <div className="flex border-b border-border overflow-x-auto justify-start md:justify-center scrollbar-hide -mx-3 sm:mx-0 px-3 sm:px-0">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`flex items-center gap-2 px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
           >
-            <t.icon className="w-4 h-4" /> {t.label}
+            <t.icon className="w-4 h-4 shrink-0" /> {t.label}
           </button>
         ))}
       </div>

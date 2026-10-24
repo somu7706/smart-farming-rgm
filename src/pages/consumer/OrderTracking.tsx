@@ -252,9 +252,9 @@ const OrderTracking = () => {
             <span className="text-primary">₹{order.total_price}</span>
           </div>
           {order.delivery_address && (
-            <div className="flex justify-between pt-1 border-t text-xs text-muted-foreground">
-              <span>Delivery Address</span>
-              <span className="text-foreground/90 font-medium text-right max-w-[280px]">
+            <div className="flex flex-col sm:flex-row justify-between pt-1 border-t text-xs text-muted-foreground gap-1">
+              <span className="shrink-0">Delivery Address</span>
+              <span className="text-foreground/90 font-medium sm:text-right max-w-full sm:max-w-[320px]">
                 {order.delivery_address}
               </span>
             </div>
@@ -264,11 +264,11 @@ const OrderTracking = () => {
 
       {/* Contact Farmer */}
       {order.status !== "delivered" && order.status !== "rejected" && order.farmer_phone && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 gap-1.5"
+            className="w-full sm:flex-1 gap-1.5 h-10"
             onClick={() => window.open(`tel:${order.farmer_phone}`)}
           >
             <Phone className="w-4 h-4 text-primary" /> Call Farmer
@@ -276,7 +276,7 @@ const OrderTracking = () => {
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 gap-1.5"
+            className="w-full sm:flex-1 gap-1.5 h-10"
             onClick={() => window.open(`sms:${order.farmer_phone}`)}
           >
             <MessageCircle className="w-4 h-4 text-primary" /> Message Farmer
@@ -342,7 +342,7 @@ const OrderTracking = () => {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-0 h-[380px]">
+          <CardContent className="p-0 h-[300px] sm:h-[380px] w-full min-w-0">
             <LiveTrackingMap
               orderId={order.id}
               consumerLat={consumerLocation.lat}

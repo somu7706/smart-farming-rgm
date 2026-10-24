@@ -70,20 +70,20 @@ const Fertilizer = () => {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 sm:mb-6">
         <div className="flex items-center gap-3">
-          <FlaskConical className="w-6 h-6 text-primary" />
+          <FlaskConical className="w-6 h-6 text-primary shrink-0" />
           <div>
-            <h1 className="text-2xl font-display font-bold text-agri-orange uppercase tracking-wide">AI Chatbot</h1>
-            <p className="text-sm text-muted-foreground">Expert AI Advice</p>
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-agri-orange uppercase tracking-wide">AI Chatbot</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Expert AI Advice</p>
           </div>
         </div>
-        <span className="flex items-center gap-1.5 px-3 py-1 bg-accent text-primary text-xs font-semibold rounded-full">
+        <span className="flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 bg-accent text-primary text-xs font-semibold rounded-full">
           <span className="w-2 h-2 rounded-full bg-primary animate-pulse-gentle" /> AI Active
         </span>
       </div>
 
-      <div className="max-w-2xl mx-auto bg-card rounded-xl card-shadow border border-border flex flex-col" style={{ height: "500px" }}>
+      <div className="max-w-2xl mx-auto bg-card rounded-xl card-shadow border border-border flex flex-col h-[420px] sm:h-[500px]">
         <div ref={scrollRef} className="flex-1 overflow-auto p-6 space-y-4">
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>

@@ -84,14 +84,14 @@ const RegionalInsights = () => {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-display font-bold text-primary">Regional Insights</h1>
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-primary">Regional Insights</h1>
           <p className="text-sm text-muted-foreground flex items-center gap-1">
             <MapPin className="w-3 h-3" /> {region}
           </p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-xs sm:text-sm">
           <Calendar className="w-4 h-4 text-muted-foreground" />
           Season: <span className="text-primary font-semibold">{season}</span>
         </div>
@@ -123,7 +123,7 @@ const RegionalInsights = () => {
                     <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="flex gap-4 justify-center mt-2">
+                <div className="flex flex-wrap gap-2 sm:gap-4 justify-center mt-2">
                   {chart.data.map((d: any) => (
                     <span key={d.name} className="flex items-center gap-1 text-xs text-muted-foreground">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} /> {d.name}

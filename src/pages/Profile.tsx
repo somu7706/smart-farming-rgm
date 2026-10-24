@@ -328,25 +328,25 @@ const UnifiedProfile = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Profile Settings</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Profile Settings</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Manage your account credentials, agricultural registrations, and real-time marketplace details
           </p>
         </div>
         {activeTab !== "addresses" && (
           !editMode ? (
-            <Button onClick={() => setEditMode(true)} className="gap-2 shrink-0">
+            <Button onClick={() => setEditMode(true)} className="gap-2 shrink-0 w-full sm:w-auto justify-center">
               <Edit2 className="w-4 h-4" /> Edit Profile
             </Button>
           ) : (
-            <div className="flex gap-2 shrink-0">
-              <Button variant="outline" onClick={handleCancel} disabled={saving}>
-                <X className="w-4 h-4 mr-2" /> Cancel
+            <div className="flex gap-2 shrink-0 w-full sm:w-auto">
+              <Button variant="outline" onClick={handleCancel} disabled={saving} className="flex-1 sm:flex-initial">
+                <X className="w-4 h-4 mr-1.5" /> Cancel
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                <Save className="w-4 h-4 mr-2" /> {saving ? "Saving Changes..." : "Save Changes"}
+              <Button onClick={handleSave} disabled={saving} className="flex-1 sm:flex-initial">
+                <Save className="w-4 h-4 mr-1.5" /> {saving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           )
@@ -430,48 +430,48 @@ const UnifiedProfile = () => {
 
           {/* Navigation Tabs */}
           <Card className="border-border/60">
-            <div className="flex flex-col p-2 space-y-1">
+            <div className="grid grid-cols-2 md:flex md:flex-col p-1.5 sm:p-2 gap-1">
               <button
-                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 sm:gap-3 w-full text-left px-2.5 sm:px-4 py-2 sm:py-3 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                   activeTab === "personal"
                     ? "bg-primary/10 text-primary font-semibold"
                     : "hover:bg-muted/50 text-muted-foreground"
                 }`}
                 onClick={() => setActiveTab("personal")}
               >
-                <Activity className="w-4 h-4" /> Personal Details
+                <Activity className="w-4 h-4 shrink-0" /> <span className="truncate">Personal Details</span>
               </button>
               {role === "farmer" && (
                 <button
-                  className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 sm:gap-3 w-full text-left px-2.5 sm:px-4 py-2 sm:py-3 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                     activeTab === "farming"
                       ? "bg-primary/10 text-primary font-semibold"
                       : "hover:bg-muted/50 text-muted-foreground"
                   }`}
                   onClick={() => setActiveTab("farming")}
                 >
-                  <Wheat className="w-4 h-4" /> Farming & Crops
+                  <Wheat className="w-4 h-4 shrink-0" /> <span className="truncate">Farming & Crops</span>
                 </button>
               )}
               <button
-                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 sm:gap-3 w-full text-left px-2.5 sm:px-4 py-2 sm:py-3 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                   activeTab === "addresses"
                     ? "bg-primary/10 text-primary font-semibold"
                     : "hover:bg-muted/50 text-muted-foreground"
                 }`}
                 onClick={() => setActiveTab("addresses")}
               >
-                <MapPin className="w-4 h-4" /> Delivery Addresses
+                <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate">Saved Addresses</span>
               </button>
               <button
-                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 sm:gap-3 w-full text-left px-2.5 sm:px-4 py-2 sm:py-3 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                   activeTab === "account"
                     ? "bg-primary/10 text-primary font-semibold"
                     : "hover:bg-muted/50 text-muted-foreground"
                 }`}
                 onClick={() => setActiveTab("account")}
               >
-                <Key className="w-4 h-4" /> Account & Security
+                <Key className="w-4 h-4 shrink-0" /> <span className="truncate">Account & Security</span>
               </button>
             </div>
           </Card>

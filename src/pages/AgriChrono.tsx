@@ -130,19 +130,19 @@ const AgriChrono = () => {
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-agri-amber/5 blur-[120px] rounded-full pointer-events-none" />
 
             <div className="max-w-7xl mx-auto relative z-10">
-                <header className="mb-10 animate-in fade-in slide-in-from-top duration-700">
-                    <div className="flex items-center gap-4 mb-2">
-                        <div className="p-3 bg-agri-green/20 rounded-2xl border border-agri-green/30">
-                            <Clock className="w-8 h-8 text-agri-green animate-pulse" />
+                <header className="mb-6 sm:mb-10 animate-in fade-in slide-from-top duration-700">
+                    <div className="flex items-center gap-3 sm:gap-4 mb-2">
+                        <div className="p-2.5 sm:p-3 bg-agri-green/20 rounded-2xl border border-agri-green/30 shrink-0">
+                            <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-agri-green animate-pulse" />
                         </div>
                         <div>
-                            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-white via-white to-agri-green/50 bg-clip-text text-transparent">
+                            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight bg-gradient-to-r from-white via-white to-agri-green/50 bg-clip-text text-transparent">
                                 AgriChrono™
                             </h1>
-                            <p className="text-agri-green font-mono text-sm tracking-widest uppercase">Precision Crop Lifecycle Intelligence</p>
+                            <p className="text-agri-green font-mono text-xs sm:text-sm tracking-widest uppercase">Precision Crop Lifecycle Intelligence</p>
                         </div>
                     </div>
-                    <p className="text-muted-foreground ml-[72px]">From seed to harvest, powered by predictive AI timing</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground sm:ml-[72px]">From seed to harvest, powered by predictive AI timing</p>
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -254,12 +254,12 @@ const AgriChrono = () => {
                                             </div>
                                             <Progress value={currentProgress} className="h-2 bg-white/5" />
                                         </div>
-                                        <div className="flex gap-6 border-l border-white/10 pl-6 h-full text-white">
-                                            <div className="text-center px-4">
+                                        <div className="flex flex-wrap gap-4 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6 text-white justify-around w-full md:w-auto">
+                                            <div className="text-center px-2 sm:px-4">
                                                 <p className="text-[10px] uppercase font-bold text-white/40 mb-1">Current State</p>
                                                 <Badge variant="outline" className="bg-agri-green/10 border-agri-green/30 text-agri-green font-bold">Vegetative</Badge>
                                             </div>
-                                            <div className="text-center px-4">
+                                            <div className="text-center px-2 sm:px-4">
                                                 <p className="text-[10px] uppercase font-bold text-white/40 mb-1">Days Sown</p>
                                                 <p className="text-xl font-bold font-mono">32 <span className="text-xs text-white/40">DAYS</span></p>
                                             </div>

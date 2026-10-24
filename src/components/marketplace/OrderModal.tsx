@@ -113,7 +113,7 @@ const OrderModal = ({ item, mode, userId, onClose }: OrderModalProps) => {
 
   return (
     <Dialog open={!!item} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <ShoppingBag className="w-5 h-5 text-primary" />
@@ -191,9 +191,9 @@ const OrderModal = ({ item, mode, userId, onClose }: OrderModalProps) => {
                   {total.toFixed(2)}
                 </span>
               </div>
-              <div className="flex justify-between text-muted-foreground text-xs pt-1">
+              <div className="flex flex-col sm:flex-row justify-between text-muted-foreground text-xs pt-1 gap-1">
                 <span className="flex items-center gap-1">
-                  <Truck className="w-3.5 h-3.5 text-primary" /> Payment Method: Cash on Delivery (COD)
+                  <Truck className="w-3.5 h-3.5 text-primary shrink-0" /> Payment: Cash on Delivery (COD)
                 </span>
                 <span>Est. Delivery: 2-4 business days</span>
               </div>
@@ -201,14 +201,14 @@ const OrderModal = ({ item, mode, userId, onClose }: OrderModalProps) => {
           )}
         </div>
 
-        <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={onClose} disabled={submitting}>
+        <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row gap-2">
+          <Button variant="outline" onClick={onClose} disabled={submitting} className="w-full sm:w-auto">
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={submitting || (mode === "buy" && !selectedAddress) || !qtyNum || qtyNum <= 0}
-            className="gap-1.5"
+            className="w-full sm:w-auto gap-1.5"
           >
             {submitting ? "Processing Order..." : `Confirm Order (₹${total.toFixed(2)})`}
           </Button>

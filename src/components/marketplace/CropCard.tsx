@@ -27,11 +27,11 @@ interface CropCardProps {
 const CropCard = ({ item, onBuyNow, onBulkOrder }: CropCardProps) => (
   <Card className="hover:shadow-md transition-shadow">
     <CardHeader className="pb-2">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
         <CardTitle className="text-base flex items-center gap-2">
-          <Wheat className="w-4 h-4 text-primary" /> {item.crop_name}
+          <Wheat className="w-4 h-4 text-primary shrink-0" /> <span className="truncate">{item.crop_name}</span>
         </CardTitle>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <Badge variant="secondary" className="text-[10px]">{item.farming_type}</Badge>
           {item.demand_level === "high" ? (
             <Badge className="bg-orange-500/15 text-orange-600 border-orange-500/30 text-[10px] gap-0.5">
@@ -44,7 +44,7 @@ const CropCard = ({ item, onBuyNow, onBulkOrder }: CropCardProps) => (
           )}
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">{item.farmer_name}</p>
+      <p className="text-sm text-muted-foreground truncate">{item.farmer_name}</p>
     </CardHeader>
     <CardContent className="space-y-2 text-sm">
       <div className="flex items-center justify-between">

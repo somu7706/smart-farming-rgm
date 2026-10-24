@@ -316,16 +316,16 @@ const MarketInsights = () => {
               </Badge>
             )}
           </div>
-          <h1 className="text-3xl font-display font-black text-foreground mt-2">AgriAssist Market Intelligence</h1>
-          <p className="text-muted-foreground mt-1">Real-time agriculture stock trading & predictive algorithms</p>
+          <h1 className="text-xl sm:text-3xl font-display font-black text-foreground mt-2">AgriAssist Market Intelligence</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Real-time agriculture stock trading & predictive algorithms</p>
         </div>
 
-        <div className="flex gap-2">
-          <div className="relative">
+        <div className="flex gap-2 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search crops..." className="pl-9 w-64 bg-card" />
+            <Input placeholder="Search crops..." className="pl-9 w-full bg-card" />
           </div>
-          <Button variant="outline" size="icon"><Filter className="w-4 h-4" /></Button>
+          <Button variant="outline" size="icon" className="shrink-0"><Filter className="w-4 h-4" /></Button>
         </div>
       </div>
 
@@ -398,7 +398,7 @@ const MarketInsights = () => {
                 </AreaChart>
               </ResponsiveContainer>
 
-              <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-border">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-4 border-t border-border">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Volatility Index</p>
                   <div className="flex items-center gap-2 mt-1">

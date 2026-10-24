@@ -128,7 +128,7 @@ const ConsumerProfile = () => {
               onChange={(e) => setDeliveryAddress(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="lat">Latitude</Label>
               <Input id="lat" type="number" step="any" placeholder="e.g. 28.6139" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
@@ -138,7 +138,7 @@ const ConsumerProfile = () => {
               <Input id="lng" type="number" step="any" placeholder="e.g. 77.209" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={detectLocation} disabled={detectingLocation} className="gap-2">
+          <Button variant="outline" size="sm" onClick={detectLocation} disabled={detectingLocation} className="w-full sm:w-auto gap-2">
             {detectingLocation ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
             Detect My Location
           </Button>
@@ -149,7 +149,7 @@ const ConsumerProfile = () => {
         </CardContent>
       </Card>
 
-      <Button variant="destructive" onClick={handleLogout} className="gap-2">
+      <Button variant="destructive" onClick={handleLogout} className="w-full sm:w-auto gap-2">
         <LogOut className="w-4 h-4" /> Logout
       </Button>
     </div>

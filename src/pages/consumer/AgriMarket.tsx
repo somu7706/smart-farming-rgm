@@ -150,23 +150,23 @@ const AgriMarket = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2.5 sm:gap-3">
         <Select value={cropFilter} onValueChange={setCropFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Filter by Crop" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="Filter by Crop" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Crops</SelectItem>
             {crops.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={regionFilter} onValueChange={setRegionFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Filter by Region" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="Filter by Region" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Regions</SelectItem>
             {regions.map((r) => <SelectItem key={r!} value={r!}>{r}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="price_asc">Price: Low → High</SelectItem>
             <SelectItem value="price_desc">Price: High → Low</SelectItem>

@@ -77,8 +77,8 @@ const Irrigation = () => {
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center gap-3">
-        <Droplets className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display font-bold text-agri-orange uppercase tracking-wide">Smart Irrigation Advisor</h1>
+        <Droplets className="w-6 h-6 text-primary shrink-0" />
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-agri-orange uppercase tracking-wide">Smart Irrigation Advisor</h1>
       </div>
       <p className="text-sm text-muted-foreground">AI-powered water management for optimal crop growth</p>
 

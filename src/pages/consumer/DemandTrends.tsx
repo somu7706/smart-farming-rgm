@@ -118,10 +118,10 @@ const DemandTrends = () => {
 
       {/* Price Trends */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
           <CardTitle className="text-base">Price Trends</CardTitle>
           <Select value={selectedCrop} onValueChange={setSelectedCrop}>
-            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Crops</SelectItem>
               {cropNames.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
