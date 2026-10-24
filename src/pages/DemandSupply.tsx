@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { api } from "@/lib/api";
-import { useRealtimeSync } from "@/hooks/useRealtimeSync";
+import { useRealtimeSync, broadcastClientSync } from "@/hooks/useRealtimeSync";
 import { useAuth } from "@/hooks/useAuth";
-import { BarChart3, AlertCircle, ArrowRight, CheckCircle, MapPin, TrendingUp, Star, Loader2, Package, Users, Calendar, Home } from "lucide-react";
+import { BarChart3, AlertCircle, ArrowRight, CheckCircle, MapPin, TrendingUp, Star, Loader2, Package, Users, Calendar, Home, Phone } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -61,7 +61,16 @@ const DemandSupply = () => {
   // Commitment state
   const [selectedDemand, setSelectedDemand] = useState<MarketDemand | null>(null);
   const [commitmentQuantity, setCommitmentQuantity] = useState("");
+  const [commitmentPhone, setCommitmentPhone] = useState("");
+  const [commitmentNotes, setCommitmentNotes] = useState("");
   const [committing, setCommitting] = useState(false);
+
+  const openCommitModal = (demand: MarketDemand) => {
+    setSelectedDemand(demand);
+    setCommitmentQuantity("");
+    setCommitmentNotes("");
+    setCommitmentPhone((user as any)?.phone || (user as any)?.phone_number || "");
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -143,7 +152,7 @@ const DemandSupply = () => {
     // Fetch Market Demands (MongoDB primary, Supabase fallback)
     try {
       const res = await api.get<{ success: boolean; orders: any[] }>("/bulk-orders");
-      if (res && res.orders && res.orders.length > 0) {
+      if (res && res.orders) {
         const mappedDemands: MarketDemand[] = res.orders.map((b: any) => ({
           id: b.id,
           bulk_order_id: b.id,
@@ -161,6 +170,8 @@ const DemandSupply = () => {
           farmer_commitments: (b.commitments || []).map((c: any) => ({
             id: c.id,
             farmer_id: c.farmerId,
+            farmer_name: c.farmerName,
+            farmer_phone: c.farmerPhone,
             committed_quantity: c.committedQuantity,
           })),
         }));
@@ -197,6 +208,15 @@ const DemandSupply = () => {
   useEffect(() => {
     fetchData();
 
+    // 1. High frequency 3-second live sync poll for production marketplace updates
+    const interval = setInterval(() => {
+      fetchData();
+    }, 3000);
+
+    // 2. Tab/window focus refetch
+    const handleFocus = () => fetchData();
+    window.addEventListener("focus", handleFocus);
+
     // Real-time updates for commitments
     const channel = supabase
       .channel("farmer_market_updates")
@@ -205,6 +225,8 @@ const DemandSupply = () => {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -235,44 +257,30 @@ const DemandSupply = () => {
     try {
       await api.post(`/bulk-orders/${selectedDemand.bulk_order_id || selectedDemand.id}/commit`, {
         committedQuantity: quantity,
+        phone: commitmentPhone,
+        notes: commitmentNotes,
       });
+
       toast.success(`Committed ${quantity} ${selectedDemand.bulk_orders?.unit || "kg"} successfully!`);
       setCommitting(false);
       setSelectedDemand(null);
       setCommitmentQuantity("");
+      setCommitmentNotes("");
       fetchData();
+
+      // Broadcast immediately across WebSocket, HTML5 BroadcastChannel, and Supabase Realtime
+      broadcastClientSync({
+        entity: "demand_supply",
+        action: "update",
+        id: selectedDemand.bulk_order_id || selectedDemand.id,
+      });
       return;
-    } catch (apiErr) {
+    } catch (apiErr: any) {
       console.warn("[DemandSupply] API commit note:", apiErr);
-    }
-
-    const { error } = await supabase.from("farmer_commitments").insert({
-      farmer_id: user.id,
-      demand_id: selectedDemand.id,
-      committed_quantity: quantity,
-      status: "committed"
-    });
-
-    if (error) {
-      toast.error("Failed to commit: " + error.message);
+      toast.error(apiErr.message || "Failed to submit commitment");
       setCommitting(false);
       return;
     }
-
-    // Check if fulfilled
-    const totalCommitted = selectedDemand.farmer_commitments.reduce((sum, c) => sum + c.committed_quantity, 0) + quantity;
-    if (totalCommitted >= selectedDemand.total_quantity) {
-      await supabase.from("crop_demands").update({ demand_status: "fulfilled" }).eq("id", selectedDemand.id);
-      await supabase.from("bulk_orders").update({ status: "fulfilled" }).eq("id", selectedDemand.bulk_order_id);
-      toast.success("Demand fulfilled! Great job!");
-    } else {
-      toast.success("Commitment registered successfully!");
-    }
-
-    setCommitting(false);
-    setSelectedDemand(null);
-    setCommitmentQuantity("");
-    fetchData();
   };
 
   const getPercentage = (demand: MarketDemand) => {
@@ -391,7 +399,7 @@ const DemandSupply = () => {
 
                   <Button
                     className="w-full h-9 text-xs"
-                    onClick={() => setSelectedDemand(demand)}
+                    onClick={() => openCommitModal(demand)}
                     disabled={getPercentage(demand) >= 100}
                   >
                     {getPercentage(demand) >= 100 ? "Fulfilled" : "I Will Produce"}
@@ -466,33 +474,64 @@ const DemandSupply = () => {
 
       {/* Commitment Modal */}
       <Dialog open={!!selectedDemand} onOpenChange={(open) => !open && setSelectedDemand(null)}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle>Commit to Production</DialogTitle>
+            <DialogDescription>
+              Commit your farm production toward this wholesale crop demand.
+            </DialogDescription>
           </DialogHeader>
           {selectedDemand && (
-            <div className="space-y-6 py-4">
-              <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+            <div className="space-y-4 py-2">
+              <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/10">
                 <p className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">Order Details</p>
                 <div className="flex justify-between items-baseline">
                   <h4 className="text-xl font-bold">{selectedDemand.crop_name}</h4>
                   <p className="text-sm font-medium">{selectedDemand.total_quantity} {selectedDemand.bulk_orders?.unit}</p>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">{selectedDemand.region}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{selectedDemand.region}</p>
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity you will produce ({selectedDemand.bulk_orders?.unit})</Label>
+              <div className="space-y-3.5">
+                <div className="space-y-1.5">
+                  <Label htmlFor="quantity">Quantity you will produce ({selectedDemand.bulk_orders?.unit}) *</Label>
                   <Input
                     id="quantity"
                     type="number"
                     autoFocus
-                    placeholder={`e.g. 500`}
+                    placeholder="e.g. 500"
                     value={commitmentQuantity}
                     onChange={(e) => setCommitmentQuantity(e.target.value)}
                   />
-                  <p className="text-[10px] text-muted-foreground italic">Remaining needed: {selectedDemand.total_quantity - getTotalCommitted(selectedDemand)} {selectedDemand.bulk_orders?.unit}</p>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Remaining needed: {Math.max(0, selectedDemand.total_quantity - getTotalCommitted(selectedDemand)).toLocaleString()} {selectedDemand.bulk_orders?.unit}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="farmer_phone">Your Contact Phone Number (Visible to Buyer) *</Label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+                    <Input
+                      id="farmer_phone"
+                      type="tel"
+                      className="pl-9"
+                      placeholder="+91 9876543210"
+                      value={commitmentPhone}
+                      onChange={(e) => setCommitmentPhone(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">The buyer will call this phone number directly to coordinate harvest collection.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="notes">Harvest Notes / Delivery Timeline (Optional)</Label>
+                  <Input
+                    id="notes"
+                    placeholder="e.g. Fresh organic harvest ready by Nov 15"
+                    value={commitmentNotes}
+                    onChange={(e) => setCommitmentNotes(e.target.value)}
+                  />
                 </div>
               </div>
             </div>

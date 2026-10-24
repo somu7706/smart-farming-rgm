@@ -206,7 +206,7 @@ export const commitToBulkOrder = async (req, res) => {
   try {
     const userId = req.user._id;
     const { id } = req.params;
-    const { committedQuantity, notes } = req.body;
+    const { committedQuantity, notes, phone, contactPhone } = req.body;
 
     const qty = parseFloat(committedQuantity);
     if (isNaN(qty) || qty <= 0) {
@@ -218,20 +218,29 @@ export const commitToBulkOrder = async (req, res) => {
       return res.status(404).json({ message: "Bulk order not found" });
     }
 
-    const farmer = await Farmer.findOne({ userId });
-    if (!farmer) {
-      return res.status(403).json({ message: "Only registered farmers can commit to bulk demands" });
+    let farmer = await Farmer.findOne({ userId });
+    const User = mongoose.model("User");
+    const userDoc = await User.findById(userId);
+
+    const farmerName = (farmer?.fullName || userDoc?.fullName || req.user.email?.split("@")[0] || "Farmer Partner").trim();
+    const farmerPhone = (phone || contactPhone || farmer?.phone || userDoc?.phone || "").trim();
+    const farmerRegion = (farmer?.region || userDoc?.region || "Local Region").trim();
+
+    // If farmer updated their phone in the modal and didn't have one, save it
+    if (farmer && !farmer.phone && farmerPhone) {
+      farmer.phone = farmerPhone;
+      await farmer.save().catch(() => {});
     }
 
     // Add commitment
     order.commitments.push({
-      farmerId: farmer._id,
+      farmerId: farmer ? farmer._id : null,
       farmerUserId: userId,
-      farmerName: farmer.fullName,
-      farmerPhone: farmer.phone,
-      farmerRegion: farmer.region,
+      farmerName,
+      farmerPhone,
+      farmerRegion,
       committedQuantity: qty,
-      notes: notes || "",
+      notes: (notes || "").trim(),
     });
 
     order.recalculateCommitted();
@@ -239,8 +248,9 @@ export const commitToBulkOrder = async (req, res) => {
 
     const formatted = order.toFrontend();
 
-    // Broadcast update
+    // Broadcast update via WebSocket
     syncManager.broadcast({
+      type: "SYNC_EVENT",
       entity: "demand_supply",
       action: "update",
       id: order._id.toString(),

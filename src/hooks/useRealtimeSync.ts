@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type SyncEntityType = "farmer_profile" | "product" | "order" | "demand_supply";
@@ -30,6 +30,21 @@ let retryCount = 0;
 let reconnectTimer: any = null;
 let heartbeatTimer: any = null;
 let isUnmounting = false;
+
+// 1. Cross-tab/window synchronization via HTML5 BroadcastChannel API
+let localBroadcastChannel: BroadcastChannel | null = null;
+if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+  try {
+    localBroadcastChannel = new BroadcastChannel("agriassist_realtime_sync");
+    localBroadcastChannel.onmessage = (event) => {
+      if (event.data && event.data.type === "SYNC_EVENT") {
+        notifySubscribers(event.data);
+      }
+    };
+  } catch (e) {
+    console.warn("[RealtimeSync] BroadcastChannel unavailable:", e);
+  }
+}
 
 const notifySubscribers = (event: SyncEvent) => {
   subscribers.forEach((cb) => {
@@ -88,7 +103,7 @@ const connectGlobalWebSocket = () => {
 
       // Exponential backoff with jitter
       if (!isUnmounting) {
-        const base = Math.min(15000, 1000 * Math.pow(1.5, retryCount));
+        const base = Math.min(10000, 1000 * Math.pow(1.5, retryCount));
         const jitter = Math.random() * 500;
         const delay = Math.round(base + jitter);
         retryCount++;
@@ -104,7 +119,7 @@ const connectGlobalWebSocket = () => {
   }
 };
 
-// Also listen to Supabase broadcast channel for multi-channel redundancy
+// 2. Also listen to Supabase broadcast channel for multi-channel edge redundancy
 let supabaseSyncChannel: any = null;
 const initSupabaseSync = () => {
   if (supabaseSyncChannel) return;
@@ -119,12 +134,21 @@ const initSupabaseSync = () => {
 };
 
 export const broadcastClientSync = async (event: Omit<SyncEvent, "timestamp">) => {
-  const fullEvent: SyncEvent = { ...event, timestamp: Date.now() };
+  const fullEvent: SyncEvent = { type: "SYNC_EVENT", ...event, timestamp: Date.now() };
 
-  // 1. Dispatch locally to all subscribers immediately
+  // 1. Dispatch locally in this window/tab immediately
   notifySubscribers(fullEvent);
 
-  // 2. Broadcast via Supabase broadcast channel
+  // 2. Broadcast to other tabs/windows in the same browser (instant, <1ms)
+  try {
+    if (localBroadcastChannel) {
+      localBroadcastChannel.postMessage(fullEvent);
+    }
+  } catch (e) {
+    console.warn("[RealtimeSync] BroadcastChannel postMessage error:", e);
+  }
+
+  // 3. Broadcast via Supabase broadcast channel (cross-device/cross-network edge)
   try {
     if (supabaseSyncChannel) {
       await supabaseSyncChannel.send({
@@ -140,6 +164,8 @@ export const broadcastClientSync = async (event: Omit<SyncEvent, "timestamp">) =
 
 export const useRealtimeSync = (entityFilter?: SyncEntityType, callback?: SyncCallback) => {
   const [lastEvent, setLastEvent] = useState<SyncEvent | null>(null);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
 
   useEffect(() => {
     isUnmounting = false;
@@ -149,7 +175,9 @@ export const useRealtimeSync = (entityFilter?: SyncEntityType, callback?: SyncCa
     const handler: SyncCallback = (event) => {
       if (!entityFilter || event.entity === entityFilter) {
         setLastEvent(event);
-        if (callback) callback(event);
+        if (callbackRef.current) {
+          callbackRef.current(event);
+        }
       }
     };
 
@@ -157,7 +185,7 @@ export const useRealtimeSync = (entityFilter?: SyncEntityType, callback?: SyncCa
     return () => {
       subscribers.delete(handler);
     };
-  }, [entityFilter, callback]);
+  }, [entityFilter]);
 
   return {
     lastEvent,

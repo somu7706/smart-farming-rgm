@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useRealtimeSync } from "@/hooks/useRealtimeSync";
+import { useRealtimeSync, broadcastClientSync } from "@/hooks/useRealtimeSync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   Clock,
   Truck,
   Users,
+  MessageSquare,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { AddressSelector, SavedAddress } from "@/components/address/AddressSelector";
@@ -123,14 +124,22 @@ const BulkOrders = () => {
     }
   }, [user]);
 
-  // Real-time synchronization
+  // Real-time synchronization across WebSocket, Supabase Broadcast, and BroadcastChannel
   useRealtimeSync("demand_supply", (event) => {
-    toast.info("🌾 Market bulk demand updated in real time!");
+    console.log("[BulkOrders] Live sync event received:", event);
     fetchOrders();
   });
 
   useEffect(() => {
     fetchOrders();
+
+    // High frequency 3-second live sync poll for production accuracy
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 3000);
+
+    const handleFocus = () => fetchOrders();
+    window.addEventListener("focus", handleFocus);
 
     // Supabase fallback channel
     const channel = supabase
@@ -139,6 +148,8 @@ const BulkOrders = () => {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
       supabase.removeChannel(channel);
     };
   }, [fetchOrders]);
@@ -221,6 +232,13 @@ const BulkOrders = () => {
         setShowForm(false);
         resetForm();
         fetchOrders();
+
+        // Broadcast to farmers and other active browser windows immediately
+        broadcastClientSync({
+          entity: "demand_supply",
+          action: "create",
+          data: res.order,
+        });
       } else {
         toast.error(res?.message || "Failed to create bulk order");
       }
@@ -381,19 +399,88 @@ const BulkOrders = () => {
                     </span>
                   </div>
 
-                  {/* Farmer Commitments details if any */}
+                  {/* Farmer Commitments details with Direct Producer Calling */}
                   {order.commitments && order.commitments.length > 0 && (
-                    <div className="pt-2 border-t text-xs space-y-1.5">
-                      <span className="font-semibold text-foreground flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5 text-primary" /> Farmer Commitments ({order.commitments.length})
-                      </span>
-                      <div className="space-y-1 max-h-24 overflow-y-auto">
-                        {order.commitments.map((c, i) => (
-                          <div key={i} className="flex justify-between items-center bg-muted/30 px-2 py-1 rounded text-[11px]">
-                            <span className="font-medium">{c.farmerName} ({c.farmerRegion || "Local"})</span>
-                            <span className="font-bold text-primary">{c.committedQuantity} {order.unit}</span>
-                          </div>
-                        ))}
+                    <div className="pt-3 border-t text-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-foreground flex items-center gap-1.5 text-xs">
+                          <Users className="w-3.5 h-3.5 text-primary" /> Farmer Commitments ({order.commitments.length})
+                        </span>
+                        <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
+                          Direct Producer Connect
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {order.commitments.map((c, i) => {
+                          const cleanPhone = (c.farmerPhone || "").replace(/\s+/g, "");
+                          return (
+                            <div
+                              key={c.id || i}
+                              className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/30 transition-colors space-y-2 shadow-xs"
+                            >
+                              {/* Farmer Name, Region & Committed Quantity */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-0.5">
+                                  <div className="font-semibold text-foreground text-xs flex items-center gap-1.5 flex-wrap">
+                                    <span>{c.farmerName}</span>
+                                    {c.farmerRegion && (
+                                      <span className="text-[10px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/40">
+                                        📍 {c.farmerRegion}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {c.createdAt && (
+                                    <p className="text-[10px] text-muted-foreground">
+                                      Committed on {new Date(c.createdAt).toLocaleDateString()}
+                                    </p>
+                                  )}
+                                </div>
+                                <Badge className="bg-primary/10 text-primary border-primary/20 text-xs shrink-0 font-bold">
+                                  {c.committedQuantity.toLocaleString()} {order.unit}
+                                </Badge>
+                              </div>
+
+                              {/* Farmer Notes if provided */}
+                              {c.notes && (
+                                <p className="text-[11px] text-muted-foreground italic bg-muted/40 p-1.5 rounded border border-border/30">
+                                  "{c.notes}"
+                                </p>
+                              )}
+
+                              {/* Direct Contact Actions: Call Farmer & WhatsApp */}
+                              <div className="flex items-center gap-2 pt-1.5 border-t border-border/40 flex-wrap">
+                                {cleanPhone ? (
+                                  <>
+                                    <a
+                                      href={`tel:${cleanPhone}`}
+                                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-xs"
+                                      title={`Call ${c.farmerName} directly: ${c.farmerPhone}`}
+                                    >
+                                      <Phone className="w-3 h-3" />
+                                      <span>Call {c.farmerPhone}</span>
+                                    </a>
+                                    <a
+                                      href={`https://wa.me/${cleanPhone.replace(/\+/g, "")}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                                      title="Chat on WhatsApp"
+                                    >
+                                      <MessageSquare className="w-3 h-3 text-emerald-600" />
+                                      <span>WhatsApp</span>
+                                    </a>
+                                  </>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <Phone className="w-3 h-3 text-muted-foreground/60" />
+                                    <span>Verified Producer (Contact shared upon harvest)</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
