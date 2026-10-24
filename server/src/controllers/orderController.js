@@ -3,6 +3,7 @@ import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import { Farmer } from "../models/Farmer.js";
 import { Consumer } from "../models/Consumer.js";
+import { Address } from "../models/Address.js";
 import { syncManager } from "../config/websocket.js";
 
 // Helper to validate state transitions
@@ -21,7 +22,7 @@ const VALID_TRANSITIONS = {
  */
 export const createOrder = async (req, res) => {
   try {
-    const { productId, quantity, deliveryAddress } = req.body;
+    const { productId, quantity, deliveryAddress, addressId, deliveryAddressSnapshot } = req.body;
     const consumerUserId = req.user._id;
 
     if (!productId) {
@@ -65,15 +66,65 @@ export const createOrder = async (req, res) => {
       return res.status(404).json({ message: "Farmer profile associated with this product could not be located" });
     }
 
-    // 4. Fetch Consumer Profile (if present)
-    const consumer = await Consumer.findOne({ userId: consumerUserId });
+    // 4. Resolve Delivery Address & Snapshot (Mandatory Selection)
+    let finalAddress = "";
+    let finalSnapshot = null;
+    let resolvedAddressId = null;
 
-    const finalAddress =
-      deliveryAddress && deliveryAddress.trim().length > 0
-        ? deliveryAddress.trim()
-        : consumer?.deliveryAddress && consumer.deliveryAddress.trim().length > 0
-        ? consumer.deliveryAddress.trim()
-        : "Standard Doorstep Delivery";
+    if (addressId && mongoose.Types.ObjectId.isValid(addressId)) {
+      const savedAddr = await Address.findOne({ _id: addressId, userId: consumerUserId });
+      if (savedAddr) {
+        resolvedAddressId = savedAddr._id;
+        finalSnapshot = savedAddr.toSnapshot();
+        finalAddress = savedAddr.getFormattedAddress();
+      }
+    }
+
+    if (!finalSnapshot && deliveryAddressSnapshot) {
+      finalSnapshot = deliveryAddressSnapshot;
+      finalAddress =
+        deliveryAddressSnapshot.formattedAddress ||
+        deliveryAddress ||
+        `${deliveryAddressSnapshot.houseNo || ""}, ${deliveryAddressSnapshot.street || ""}, ${deliveryAddressSnapshot.city || ""}, ${deliveryAddressSnapshot.state || ""} - ${deliveryAddressSnapshot.pincode || ""}`;
+    } else if (!finalAddress && deliveryAddress) {
+      finalAddress = deliveryAddress.trim();
+      finalSnapshot = {
+        formattedAddress: finalAddress,
+        recipientName: req.user.email.split("@")[0],
+        phone: "",
+      };
+    }
+
+    // If still no address, check if user has a default address
+    if (!finalAddress) {
+      const defaultAddr = await Address.findOne({ userId: consumerUserId, isDefault: true });
+      if (defaultAddr) {
+        resolvedAddressId = defaultAddr._id;
+        finalSnapshot = defaultAddr.toSnapshot();
+        finalAddress = defaultAddr.getFormattedAddress();
+      }
+    }
+
+    // If still empty, check consumer profile
+    if (!finalAddress) {
+      const consumer = await Consumer.findOne({ userId: consumerUserId });
+      if (consumer?.deliveryAddress && consumer.deliveryAddress.trim().length > 0) {
+        finalAddress = consumer.deliveryAddress.trim();
+        finalSnapshot = {
+          formattedAddress: finalAddress,
+          recipientName: consumer.fullName || req.user.email.split("@")[0],
+          phone: consumer.phone || "",
+        };
+      }
+    }
+
+    if (!finalAddress || finalAddress.trim().length === 0) {
+      return res.status(400).json({
+        message: "A delivery address is required before proceeding to place an order.",
+      });
+    }
+
+    const consumer = await Consumer.findOne({ userId: consumerUserId });
 
     // 5. Authoritative Server-side Price Calculations
     const pricePerKg = Number(product.price);
@@ -93,7 +144,7 @@ export const createOrder = async (req, res) => {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const orderNumber = `ORD-${datePrefix}-${randomSuffix}`;
 
-    // 8. Create Order Document
+    // 8. Create Order Document with Address Snapshot
     const order = await Order.create({
       orderNumber,
       consumerId: consumerUserId,
@@ -104,7 +155,9 @@ export const createOrder = async (req, res) => {
       quantity: qty,
       pricePerKg,
       totalPrice,
+      addressId: resolvedAddressId,
       deliveryAddress: finalAddress,
+      deliveryAddressSnapshot: finalSnapshot,
       status: "pending",
       statusHistory: [
         {
@@ -114,8 +167,8 @@ export const createOrder = async (req, res) => {
         },
       ],
       consumerDetails: {
-        fullName: consumer?.fullName || req.user.email.split("@")[0],
-        phone: consumer?.phone || "",
+        fullName: finalSnapshot?.recipientName || consumer?.fullName || req.user.email.split("@")[0],
+        phone: finalSnapshot?.phone || consumer?.phone || "",
         email: req.user.email,
         deliveryAddress: finalAddress,
       },
@@ -126,8 +179,8 @@ export const createOrder = async (req, res) => {
         region: farmer.region,
       },
       tracking: {
-        currentLatitude: farmer.latitude || 28.6139,
-        currentLongitude: farmer.longitude || 77.209,
+        currentLatitude: finalSnapshot?.latitude || farmer.latitude || 28.6139,
+        currentLongitude: finalSnapshot?.longitude || farmer.longitude || 77.209,
         speed: 0,
         lastUpdated: new Date(),
       },

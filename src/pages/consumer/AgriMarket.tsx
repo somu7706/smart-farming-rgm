@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from "sonner";
 import { MapPin, IndianRupee, Package, Wheat, ShoppingCart } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import OrderModal from "@/components/marketplace/OrderModal";
 
 interface MarketItem {
   farmer_id: string;
@@ -218,52 +219,18 @@ const AgriMarket = () => {
         </div>
       )}
 
-      {/* Order Modal */}
-      <Dialog open={!!orderItem} onOpenChange={(open) => { if (!open) setOrderItem(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Place Order — {orderItem?.crop_name}</DialogTitle>
-            <DialogDescription>Specify order quantity to place direct request to farmer.</DialogDescription>
-          </DialogHeader>
-          {orderItem && (
-            <div className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                Farmer: <span className="text-foreground font-medium">{orderItem.farmer_name}</span>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Price: <span className="text-foreground font-medium">₹{orderItem.expected_price}/kg</span>
-              </div>
-              <div className="space-y-2">
-                <Label>Quantity (kg)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={orderQty}
-                  onChange={(e) => setOrderQty(e.target.value)}
-                  placeholder="Enter quantity in kg"
-                />
-              </div>
-              {orderQty && parseFloat(orderQty) > 0 && (
-                <div className="bg-muted rounded-md p-3 text-sm">
-                  <div className="flex justify-between">
-                    <span>Total Price</span>
-                    <span className="font-bold text-foreground">
-                      ₹{(parseFloat(orderQty) * orderItem.expected_price).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOrderItem(null)}>Cancel</Button>
-            <Button onClick={handlePlaceOrder} disabled={ordering}>
-              {ordering ? "Placing..." : "Confirm Order"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Unified Express Produce Checkout Modal */}
+      {orderItem && (
+        <OrderModal
+          item={orderItem as any}
+          mode="buy"
+          userId={user?.id}
+          onClose={() => {
+            setOrderItem(null);
+            fetchData();
+          }}
+        />
+      )}
     </div>
   );
 };

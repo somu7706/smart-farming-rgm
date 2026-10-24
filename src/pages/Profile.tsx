@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { broadcastClientSync } from "@/hooks/useRealtimeSync";
+import { AddressSelector } from "@/components/address/AddressSelector";
 
 const cropOptions = [
   "Rice", "Wheat", "Maize", "Sugarcane", "Cotton",
@@ -29,7 +30,7 @@ const UnifiedProfile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<"personal" | "farming" | "account">("personal");
+  const [activeTab, setActiveTab] = useState<"personal" | "farming" | "account" | "addresses">("personal");
 
   const [formData, setFormData] = useState<any>({});
   const [initialData, setInitialData] = useState<any>({});
@@ -334,19 +335,21 @@ const UnifiedProfile = () => {
             Manage your account credentials, agricultural registrations, and real-time marketplace details
           </p>
         </div>
-        {!editMode ? (
-          <Button onClick={() => setEditMode(true)} className="gap-2 shrink-0">
-            <Edit2 className="w-4 h-4" /> Edit Profile
-          </Button>
-        ) : (
-          <div className="flex gap-2 shrink-0">
-            <Button variant="outline" onClick={handleCancel} disabled={saving}>
-              <X className="w-4 h-4 mr-2" /> Cancel
+        {activeTab !== "addresses" && (
+          !editMode ? (
+            <Button onClick={() => setEditMode(true)} className="gap-2 shrink-0">
+              <Edit2 className="w-4 h-4" /> Edit Profile
             </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              <Save className="w-4 h-4 mr-2" /> {saving ? "Saving Changes..." : "Save Changes"}
-            </Button>
-          </div>
+          ) : (
+            <div className="flex gap-2 shrink-0">
+              <Button variant="outline" onClick={handleCancel} disabled={saving}>
+                <X className="w-4 h-4 mr-2" /> Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                <Save className="w-4 h-4 mr-2" /> {saving ? "Saving Changes..." : "Save Changes"}
+              </Button>
+            </div>
+          )
         )}
       </div>
 
@@ -452,6 +455,16 @@ const UnifiedProfile = () => {
               )}
               <button
                 className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "addresses"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "hover:bg-muted/50 text-muted-foreground"
+                }`}
+                onClick={() => setActiveTab("addresses")}
+              >
+                <MapPin className="w-4 h-4" /> Delivery Addresses
+              </button>
+              <button
+                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
                   activeTab === "account"
                     ? "bg-primary/10 text-primary font-semibold"
                     : "hover:bg-muted/50 text-muted-foreground"
@@ -473,10 +486,14 @@ const UnifiedProfile = () => {
                   ? "Contact & Location Information"
                   : activeTab === "farming"
                   ? "Cultivation, Harvest & Production Details"
+                  : activeTab === "addresses"
+                  ? "Saved Delivery Addresses"
                   : "Account & Login Security"}
               </CardTitle>
               <CardDescription>
-                {editMode
+                {activeTab === "addresses"
+                  ? "Manage your delivery addresses, set defaults, or add new locations with GPS map pinning."
+                  : editMode
                   ? "Modify fields and click Save Changes to sync across the system."
                   : "Click 'Edit Profile' to update your details."}
               </CardDescription>
@@ -839,6 +856,13 @@ const UnifiedProfile = () => {
                       To change your password, you can use the secure single-use Password Reset procedure sent directly to your registered email address.
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* 4. ADDRESSES TAB */}
+              {activeTab === "addresses" && (
+                <div className="space-y-4">
+                  <AddressSelector title="Manage Saved Delivery Addresses" />
                 </div>
               )}
 

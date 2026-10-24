@@ -11,6 +11,8 @@ import authRoutes from "./routes/authRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import addressRoutes from "./routes/addressRoutes.js";
+import bulkOrderRoutes from "./routes/bulkOrderRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -73,6 +75,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/addresses", addressRoutes);
+app.use("/api/bulk-orders", bulkOrderRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

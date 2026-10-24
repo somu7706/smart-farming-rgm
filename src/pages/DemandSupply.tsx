@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { api } from "@/lib/api";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useAuth } from "@/hooks/useAuth";
-import { BarChart3, AlertCircle, ArrowRight, CheckCircle, MapPin, TrendingUp, Star, Loader2, Package, Users, Calendar } from "lucide-react";
+import { BarChart3, AlertCircle, ArrowRight, CheckCircle, MapPin, TrendingUp, Star, Loader2, Package, Users, Calendar, Home } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ interface MarketDemand {
   region: string;
   demand_status: string;
   created_at: string;
+  delivery_address?: string;
   bulk_orders: {
     unit: string;
     expected_delivery_start: string;
@@ -139,7 +140,38 @@ const DemandSupply = () => {
       setBuyers(buyerList);
     }
 
-    // Fetch Market Demands
+    // Fetch Market Demands (MongoDB primary, Supabase fallback)
+    try {
+      const res = await api.get<{ success: boolean; orders: any[] }>("/bulk-orders");
+      if (res && res.orders && res.orders.length > 0) {
+        const mappedDemands: MarketDemand[] = res.orders.map((b: any) => ({
+          id: b.id,
+          bulk_order_id: b.id,
+          crop_name: b.crop_name || b.cropName,
+          total_quantity: b.quantity_required || b.quantityRequired,
+          region: b.region || "Any",
+          demand_status: b.status,
+          created_at: b.created_at,
+          delivery_address: b.delivery_address || b.deliveryAddress,
+          bulk_orders: {
+            unit: b.unit || "kg",
+            expected_delivery_start: b.expected_delivery_start,
+            expected_delivery_end: b.expected_delivery_end,
+          },
+          farmer_commitments: (b.commitments || []).map((c: any) => ({
+            id: c.id,
+            farmer_id: c.farmerId,
+            committed_quantity: c.committedQuantity,
+          })),
+        }));
+        setMarketDemands(mappedDemands);
+        setLoading(false);
+        return;
+      }
+    } catch (apiErr) {
+      console.warn("[DemandSupply] API fetch error, fallback to Supabase:", apiErr);
+    }
+
     const { data: demandsData } = await supabase
       .from("crop_demands")
       .select(`
@@ -185,6 +217,10 @@ const DemandSupply = () => {
     fetchData();
   });
 
+  useRealtimeSync("demand_supply", () => {
+    fetchData();
+  });
+
   const handleCommit = async () => {
     if (!user || !selectedDemand || !commitmentQuantity) return;
 
@@ -195,6 +231,20 @@ const DemandSupply = () => {
     }
 
     setCommitting(true);
+
+    try {
+      await api.post(`/bulk-orders/${selectedDemand.bulk_order_id || selectedDemand.id}/commit`, {
+        committedQuantity: quantity,
+      });
+      toast.success(`Committed ${quantity} ${selectedDemand.bulk_orders?.unit || "kg"} successfully!`);
+      setCommitting(false);
+      setSelectedDemand(null);
+      setCommitmentQuantity("");
+      fetchData();
+      return;
+    } catch (apiErr) {
+      console.warn("[DemandSupply] API commit note:", apiErr);
+    }
 
     const { error } = await supabase.from("farmer_commitments").insert({
       farmer_id: user.id,
@@ -331,6 +381,12 @@ const DemandSupply = () => {
                       <Calendar className="w-3 h-3" />
                       <span>Delivery: {demand.bulk_orders?.expected_delivery_start ? new Date(demand.bulk_orders.expected_delivery_start).toLocaleDateString() : 'TBD'}</span>
                     </div>
+                    {demand.delivery_address && (
+                      <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground bg-muted/40 p-2 rounded">
+                        <Home className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                        <span className="truncate">Delivery: {demand.delivery_address}</span>
+                      </div>
+                    )}
                   </div>
 
                   <Button

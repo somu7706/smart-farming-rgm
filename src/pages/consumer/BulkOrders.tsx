@@ -1,28 +1,56 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { api } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, MapPin, Calendar, Package, TrendingUp } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  MapPin,
+  Calendar,
+  Package,
+  TrendingUp,
+  CheckCircle2,
+  Home,
+  Phone,
+  Clock,
+  Truck,
+  Users,
+} from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { AddressSelector, SavedAddress } from "@/components/address/AddressSelector";
 
 interface BulkOrder {
   id: string;
+  bulk_order_number?: string;
   crop_name: string;
   quantity_required: number;
   unit: string;
   region: string | null;
   expected_delivery_start: string | null;
   expected_delivery_end: string | null;
+  delivery_address?: string;
+  delivery_address_snapshot?: any;
   status: string;
   created_at: string;
   total_committed: number;
+  commitments?: Array<{
+    id: string;
+    farmerName: string;
+    farmerPhone: string;
+    farmerRegion: string;
+    committedQuantity: number;
+    status: string;
+    notes?: string;
+  }>;
 }
 
 const BulkOrders = () => {
@@ -39,100 +67,170 @@ const BulkOrders = () => {
   const [region, setRegion] = useState("");
   const [deliveryStart, setDeliveryStart] = useState("");
   const [deliveryEnd, setDeliveryEnd] = useState("");
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     if (!user) return;
 
-    // Fetch bulk orders
-    const { data: ordersData, error: ordersError } = await supabase
-      .from("bulk_orders")
-      .select(`
-        *,
-        crop_demands (
-          id,
-          farmer_commitments (
-            committed_quantity
-          )
-        )
-      ` as any)
-      .eq("customer_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (ordersError) {
-      console.error("Error fetching orders:", ordersError);
-      setLoading(false);
-      return;
+    // 1. Fetch from authoritative Node.js / MongoDB API
+    try {
+      const res = await api.get<{ success: boolean; orders: BulkOrder[] }>("/bulk-orders");
+      if (res && res.orders) {
+        setOrders(res.orders);
+        setLoading(false);
+        return;
+      }
+    } catch (apiErr) {
+      console.warn("[BulkOrders] API fetch failed, trying Supabase fallback:", apiErr);
     }
 
-    const processedOrders: BulkOrder[] = (ordersData || []).map((order: any) => {
-      const demand = order.crop_demands?.[0];
-      const totalCommitted = demand?.farmer_commitments?.reduce(
-        (acc: number, curr: any) => acc + curr.committed_quantity,
-        0
-      ) || 0;
+    // 2. Fallback to Supabase
+    try {
+      const { data: ordersData, error: ordersError } = await supabase
+        .from("bulk_orders")
+        .select(`
+          *,
+          crop_demands (
+            id,
+            farmer_commitments (
+              committed_quantity
+            )
+          )
+        ` as any)
+        .eq("customer_id", user.id)
+        .order("created_at", { ascending: false });
 
-      return {
-        ...order,
-        total_committed: totalCommitted
-      };
-    });
+      if (ordersData) {
+        const processedOrders: BulkOrder[] = ordersData.map((order: any) => {
+          const demand = order.crop_demands?.[0];
+          const totalCommitted =
+            demand?.farmer_commitments?.reduce(
+              (acc: number, curr: any) => acc + (curr.committed_quantity || 0),
+              0
+            ) || 0;
 
-    setOrders(processedOrders);
-    setLoading(false);
-  };
+          return {
+            ...order,
+            total_committed: totalCommitted,
+          };
+        });
+        setOrders(processedOrders);
+      }
+    } catch (e) {
+      console.error("[BulkOrders] Supabase orders fetch error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Real-time synchronization
+  useRealtimeSync("demand_supply", (event) => {
+    toast.info("🌾 Market bulk demand updated in real time!");
+    fetchOrders();
+  });
 
   useEffect(() => {
     fetchOrders();
 
-    // Set up realtime subscription
+    // Supabase fallback channel
     const channel = supabase
       .channel("bulk_orders_updates")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "farmer_commitments" },
-        () => fetchOrders()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "bulk_orders" },
-        () => fetchOrders()
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "bulk_orders" }, () => fetchOrders())
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [fetchOrders]);
 
-  const handleSubmit = async () => {
-    if (!user || !cropName || !quantity || !unit) {
-      toast.error("Please fill in all required fields");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user) {
+      toast.error("Please log in as a consumer to create bulk orders");
+      return;
+    }
+
+    if (!cropName.trim()) {
+      toast.error("Please enter a crop name");
+      return;
+    }
+
+    const qtyNum = parseFloat(quantity);
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      toast.error("Please enter a valid quantity greater than zero");
+      return;
+    }
+
+    if (!deliveryStart || !deliveryEnd) {
+      toast.error("Please select both expected delivery start and end dates");
+      return;
+    }
+
+    const start = new Date(deliveryStart);
+    const end = new Date(deliveryEnd);
+
+    if (end < start) {
+      toast.error("Expected delivery end date cannot be earlier than start date");
+      return;
+    }
+
+    if (!selectedAddress) {
+      toast.error("Please select or add a delivery address for fulfillment");
       return;
     }
 
     setSubmitting(true);
-    const { error } = await supabase.from("bulk_orders").insert({
-      customer_id: user.id,
-      crop_name: cropName,
-      quantity_required: parseFloat(quantity),
-      unit: unit,
-      region: region || "Any",
-      expected_delivery_start: deliveryStart || null,
-      expected_delivery_end: deliveryEnd || null,
-      status: "open",
-    });
 
-    setSubmitting(false);
+    const payload = {
+      cropName: cropName.trim(),
+      quantityRequired: qtyNum,
+      unit,
+      region: region.trim() || "Any",
+      expectedDeliveryStart: deliveryStart,
+      expectedDeliveryEnd: deliveryEnd,
+      addressId: selectedAddress.id,
+      deliveryAddress: selectedAddress.formattedAddress,
+      deliveryAddressSnapshot: {
+        addressId: selectedAddress.id,
+        recipientName: selectedAddress.recipientName,
+        phone: selectedAddress.phone,
+        houseNo: selectedAddress.houseNo,
+        street: selectedAddress.street,
+        landmark: selectedAddress.landmark,
+        city: selectedAddress.city,
+        district: selectedAddress.district,
+        state: selectedAddress.state,
+        pincode: selectedAddress.pincode,
+        label: selectedAddress.label,
+        instructions: selectedAddress.instructions,
+        formattedAddress: selectedAddress.formattedAddress,
+        latitude: selectedAddress.latitude,
+        longitude: selectedAddress.longitude,
+      },
+    };
 
-    if (error) {
-      toast.error("Failed to create order: " + error.message);
-      return;
+    try {
+      const res = await api.post<any>("/bulk-orders", payload);
+
+      if (res && (res.success || res.order)) {
+        toast.success(
+          `Bulk Order #${res.order?.bulk_order_number || ""} created and published to Market Demand!`,
+          { duration: 6000 }
+        );
+        setShowForm(false);
+        resetForm();
+        fetchOrders();
+      } else {
+        toast.error(res?.message || "Failed to create bulk order");
+      }
+    } catch (err: any) {
+      console.error("[BulkOrders] Error creating order:", err);
+      const msg = err.response?.data?.message || err.message || "Failed to create bulk order";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
-
-    toast.success("Bulk order created and listed in Market Demand!");
-    setShowForm(false);
-    resetForm();
-    fetchOrders();
   };
 
   const resetForm = () => {
@@ -145,150 +243,289 @@ const BulkOrders = () => {
   };
 
   const getPercentage = (committed: number, required: number) => {
+    if (!required) return 0;
     return Math.min(Math.round((committed / required) * 100), 100);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "fulfilled": return "bg-green-500 text-white";
-      case "open": return "bg-blue-500 text-white";
-      default: return "bg-gray-500 text-white";
+      case "fulfilled":
+        return "bg-green-600 text-white";
+      case "committed":
+        return "bg-blue-600 text-white";
+      case "open":
+        return "bg-amber-600 text-white";
+      default:
+        return "bg-gray-500 text-white";
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        <span className="ml-2 text-muted-foreground">Loading bulk orders...</span>
-      </div>
-    );
-  }
+  const todayStr = new Date().toISOString().split("T")[0];
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Bulk Orders</h1>
-          <p className="text-sm text-muted-foreground">Monitor your bulk orders and farmer production progress</p>
+          <h1 className="text-2xl font-bold text-foreground">Bulk Orders & Crop Demands</h1>
+          <p className="text-sm text-muted-foreground">
+            Place wholesale harvest demands and track farmer production commitments
+          </p>
         </div>
         <Button onClick={() => setShowForm(true)} size="sm" className="gap-2">
           <Plus className="w-4 h-4" /> New Bulk Order
         </Button>
       </div>
 
-      {orders.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-12 text-center">
-            <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-20" />
-            <h3 className="text-lg font-medium">No bulk orders yet</h3>
-            <p className="text-muted-foreground mb-6">Create a bulk order to attract farmers for production</p>
-            <Button onClick={() => setShowForm(true)} variant="outline">Create Your First Bulk Order</Button>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreground">Loading bulk orders...</span>
+        </div>
+      ) : orders.length === 0 ? (
+        <Card className="border-dashed border-2">
+          <CardContent className="py-12 text-center space-y-3">
+            <Package className="w-12 h-12 mx-auto text-muted-foreground opacity-30" />
+            <h3 className="text-lg font-semibold text-foreground">No bulk orders placed yet</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Create an institutional or wholesale bulk order. Registered farmers across India can view your demand and commit production directly to your doorstep.
+            </p>
+            <Button onClick={() => setShowForm(true)} variant="outline" className="mt-2">
+              <Plus className="w-4 h-4 mr-1" /> Create Your First Bulk Order
+            </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {orders.map((order) => (
-            <Card key={order.id} className="overflow-hidden border-border/50 hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg font-bold">{order.crop_name}</CardTitle>
-                    <div className="flex items-center text-sm text-muted-foreground gap-1">
-                      <MapPin className="w-3 h-3" /> {order.region}
+          {orders.map((order) => {
+            const pct = getPercentage(order.total_committed, order.quantity_required);
+
+            return (
+              <Card
+                key={order.id}
+                className="overflow-hidden border-border/60 hover:border-primary/50 transition-colors shadow-sm"
+              >
+                <CardHeader className="pb-3 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-bold flex items-center gap-2">
+                        <span>{order.crop_name}</span>
+                        {order.bulk_order_number && (
+                          <span className="text-xs font-mono text-muted-foreground font-normal">
+                            #{order.bulk_order_number}
+                          </span>
+                        )}
+                      </CardTitle>
+                      <div className="flex items-center text-xs text-muted-foreground gap-1 mt-0.5">
+                        <MapPin className="w-3.5 h-3.5 text-primary" /> Preferred Production: {order.region || "Any Region"}
+                      </div>
+                    </div>
+                    <Badge className={getStatusColor(order.status)}>
+                      {order.status === "open"
+                        ? "Open for Farmers"
+                        : order.status === "committed"
+                        ? "Production In Progress"
+                        : order.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3.5 pt-4">
+                  {/* Quantity & Commitment Metric */}
+                  <div className="grid grid-cols-2 gap-4 text-sm bg-muted/40 p-2.5 rounded-lg">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Required Quantity</p>
+                      <p className="font-bold text-foreground text-base">
+                        {order.quantity_required.toLocaleString()} {order.unit}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Committed by Farmers</p>
+                      <p className="font-bold text-primary text-base">
+                        {order.total_committed.toLocaleString()} {order.unit}
+                      </p>
                     </div>
                   </div>
-                  <Badge className={getStatusColor(order.status)}>
-                    {order.status === "open" ? "Production in Progress" : order.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground">Target Quantity</p>
-                    <p className="font-semibold">{order.quantity_required} {order.unit}</p>
-                  </div>
-                  <div className="space-y-1 text-right">
-                    <p className="text-muted-foreground">Farmers Committed</p>
-                    <p className="font-semibold">{order.total_committed} {order.unit}</p>
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-primary">{getPercentage(order.total_committed, order.quantity_required)}% Fulfilled</span>
-                    <span className="text-muted-foreground italic">
-                      {order.expected_delivery_end ? `Est. Completion: ${new Date(order.expected_delivery_end).toLocaleDateString()}` : "No end date set"}
+                  {/* Progress Bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-medium text-foreground">{pct}% Fulfilled</span>
+                      <span className="text-muted-foreground">
+                        Remaining: {Math.max(0, order.quantity_required - order.total_committed).toLocaleString()} {order.unit}
+                      </span>
+                    </div>
+                    <Progress value={pct} className="h-2" />
+                  </div>
+
+                  {/* Delivery Destination Snapshot */}
+                  {order.delivery_address && (
+                    <div className="bg-primary/5 border border-primary/15 rounded p-2.5 text-xs space-y-1">
+                      <span className="font-semibold text-foreground flex items-center gap-1">
+                        <Home className="w-3 h-3 text-primary" /> Delivery Destination
+                      </span>
+                      <p className="text-muted-foreground line-clamp-2">
+                        {order.delivery_address}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Delivery Window */}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                      Window: {order.expected_delivery_start || "TBD"} to {order.expected_delivery_end || "TBD"}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-muted-foreground" />
+                      {new Date(order.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  <Progress value={getPercentage(order.total_committed, order.quantity_required)} className="h-2" />
-                </div>
 
-                <div className="pt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  <Calendar className="w-3 h-3" />
-                  <span>Delivery window: {order.expected_delivery_start ? new Date(order.expected_delivery_start).toLocaleDateString() : 'TBD'} - {order.expected_delivery_end ? new Date(order.expected_delivery_end).toLocaleDateString() : 'TBD'}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  {/* Farmer Commitments details if any */}
+                  {order.commitments && order.commitments.length > 0 && (
+                    <div className="pt-2 border-t text-xs space-y-1.5">
+                      <span className="font-semibold text-foreground flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-primary" /> Farmer Commitments ({order.commitments.length})
+                      </span>
+                      <div className="space-y-1 max-h-24 overflow-y-auto">
+                        {order.commitments.map((c, i) => (
+                          <div key={i} className="flex justify-between items-center bg-muted/30 px-2 py-1 rounded text-[11px]">
+                            <span className="font-medium">{c.farmerName} ({c.farmerRegion || "Local"})</span>
+                            <span className="font-bold text-primary">{c.committedQuantity} {order.unit}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {/* New Bulk Order Form Dialog */}
+      {/* Create Bulk Order Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Bulk Order</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-primary" />
+              Create Wholesale Crop Demand
+            </DialogTitle>
+            <DialogDescription>
+              Specify crop demand details and select your verified doorstep delivery destination.
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="crop_name">Crop Name *</Label>
-                <Input id="crop_name" value={cropName} onChange={(e) => setCropName(e.target.value)} placeholder="e.g. Cotton, Rice" />
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Crop & Production Region */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Crop Name *</Label>
+                <Input
+                  value={cropName}
+                  onChange={(e) => setCropName(e.target.value)}
+                  placeholder="e.g. Cotton, Basmati Rice, Wheat"
+                  required
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="region">Region *</Label>
-                <Input id="region" value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Kurnool, Punjab" />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Preferred Production Region *</Label>
+                <Input
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  placeholder="e.g. Guntur, Kurnool, Any Region"
+                  required
+                />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity Required *</Label>
-                <Input id="quantity" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="5000" />
+            {/* Quantity & Unit */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Required Quantity *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="e.g. 5000"
+                  required
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="unit">Unit *</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Unit of Measurement *</Label>
                 <Select value={unit} onValueChange={setUnit}>
-                  <SelectTrigger id="unit"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="kg">Kilograms (kg)</SelectItem>
-                    <SelectItem value="ton">Tons</SelectItem>
-                    <SelectItem value="quintal">Quintals</SelectItem>
+                    <SelectItem value="quintal">Quintals (100 kg)</SelectItem>
+                    <SelectItem value="ton">Metric Tons (1000 kg)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start_date">Expected Delivery Start</Label>
-                <Input id="start_date" type="date" value={deliveryStart} onChange={(e) => setDeliveryStart(e.target.value)} />
+            {/* Expected Delivery Window */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Expected Delivery Start *</Label>
+                <Input
+                  type="date"
+                  min={todayStr}
+                  value={deliveryStart}
+                  onChange={(e) => setDeliveryStart(e.target.value)}
+                  required
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="end_date">Expected Delivery End</Label>
-                <Input id="end_date" type="date" value={deliveryEnd} onChange={(e) => setDeliveryEnd(e.target.value)} />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Expected Delivery End *</Label>
+                <Input
+                  type="date"
+                  min={deliveryStart || todayStr}
+                  value={deliveryEnd}
+                  onChange={(e) => setDeliveryEnd(e.target.value)}
+                  required
+                />
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create Bulk Order
-            </Button>
-          </DialogFooter>
+
+            {/* Mandatory Delivery Address Selection with Map */}
+            <div className="pt-2 border-t">
+              <AddressSelector
+                selectedAddressId={selectedAddress?.id}
+                onSelect={(addr) => setSelectedAddress(addr)}
+                title="Bulk Delivery Destination *"
+              />
+            </div>
+
+            {/* Order Review Box */}
+            {selectedAddress && (
+              <div className="bg-muted/40 border rounded-lg p-3 text-xs space-y-1">
+                <span className="font-semibold text-foreground flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-primary" /> Delivery Destination Selected
+                </span>
+                <p className="text-muted-foreground">{selectedAddress.formattedAddress}</p>
+                <p className="text-foreground/80 font-medium">Contact: {selectedAddress.recipientName} (+91 {selectedAddress.phone})</p>
+              </div>
+            )}
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting || !selectedAddress}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Publishing...
+                  </>
+                ) : (
+                  "Create Bulk Order"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
@@ -296,4 +533,3 @@ const BulkOrders = () => {
 };
 
 export default BulkOrders;
-

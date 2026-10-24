@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AddressSelector, SavedAddress } from "@/components/address/AddressSelector";
+import { ShoppingBag, Truck, IndianRupee, MapPin } from "lucide-react";
 import type { MarketCrop } from "./CropCard";
 
 interface OrderModalProps {
@@ -17,7 +19,7 @@ interface OrderModalProps {
 
 const OrderModal = ({ item, mode, userId, onClose }: OrderModalProps) => {
   const [qty, setQty] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (!item) return null;
@@ -35,6 +37,11 @@ const OrderModal = ({ item, mode, userId, onClose }: OrderModalProps) => {
       return;
     }
 
+    if (mode === "buy" && !selectedAddress) {
+      toast.error("Please select or add a delivery address to proceed");
+      return;
+    }
+
     setSubmitting(true);
 
     if (mode === "buy") {
@@ -42,22 +49,42 @@ const OrderModal = ({ item, mode, userId, onClose }: OrderModalProps) => {
         const payload = {
           productId: item.id || item.farmer_id,
           quantity: qtyNum,
-          deliveryAddress: deliveryAddress.trim() || undefined,
+          addressId: selectedAddress?.id,
+          deliveryAddress: selectedAddress?.formattedAddress,
+          deliveryAddressSnapshot: selectedAddress
+            ? {
+                addressId: selectedAddress.id,
+                recipientName: selectedAddress.recipientName,
+                phone: selectedAddress.phone,
+                houseNo: selectedAddress.houseNo,
+                street: selectedAddress.street,
+                landmark: selectedAddress.landmark,
+                city: selectedAddress.city,
+                district: selectedAddress.district,
+                state: selectedAddress.state,
+                pincode: selectedAddress.pincode,
+                label: selectedAddress.label,
+                instructions: selectedAddress.instructions,
+                formattedAddress: selectedAddress.formattedAddress,
+                latitude: selectedAddress.latitude,
+                longitude: selectedAddress.longitude,
+              }
+            : undefined,
         };
 
         const res = await api.post<any>("/orders", payload);
 
         if (res && (res.success || res.order)) {
-          toast.success(`Order placed successfully for ${qtyNum} kg of ${item.crop_name}!`, {
-            duration: 5000,
-          });
+          toast.success(
+            `Order #${res.order?.orderNumber || ""} placed successfully for ${qtyNum} kg of ${item.crop_name}!`,
+            { duration: 6000 }
+          );
           onClose();
         } else {
           toast.error(res?.message || "Failed to place order");
         }
       } catch (err: any) {
         console.error("[OrderModal] Error placing order:", err);
-        // If API error has message, show it
         const msg = err.response?.data?.message || err.message || "Failed to place order";
         toast.error(msg);
       }
@@ -86,65 +113,104 @@ const OrderModal = ({ item, mode, userId, onClose }: OrderModalProps) => {
 
   return (
     <Dialog open={!!item} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{mode === "buy" ? "Buy Produce" : "Bulk Order"} — {item.crop_name}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <ShoppingBag className="w-5 h-5 text-primary" />
+            {mode === "buy" ? "Express Produce Checkout" : "Bulk Order Request"} — {item.crop_name}
+          </DialogTitle>
           <DialogDescription>
-            {mode === "buy" ? "Order directly from the verified farmer." : "Send custom bulk requirement to farmer."}
+            {mode === "buy"
+              ? "Review crop price, select your verified delivery address, and confirm."
+              : "Send custom bulk requirement to farmer."}
           </DialogDescription>
         </DialogHeader>
+
         <div className="space-y-4">
-          <div className="text-sm text-muted-foreground">
-            Farmer: <span className="text-foreground font-medium">{item.farmer_name}</span>
+          {/* Crop & Pricing Overview Card */}
+          <div className="bg-muted/40 border rounded-lg p-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div>
+              <span className="text-muted-foreground block">Farmer</span>
+              <span className="font-semibold text-foreground text-sm truncate block">{item.farmer_name}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block">Unit Price</span>
+              <span className="font-semibold text-foreground text-sm block">₹{item.expected_price}/kg</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block">Available Stock</span>
+              <span className="font-semibold text-foreground text-sm block">{item.total_yield} kg</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block">Farming Type</span>
+              <span className="font-semibold text-foreground text-sm block">{item.farming_type}</span>
+            </div>
           </div>
-          <div className="text-sm text-muted-foreground">
-            Price: <span className="text-foreground font-medium">₹{item.expected_price}/kg</span>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Available: <span className="text-foreground font-medium">{item.total_yield} kg</span>
-          </div>
-          <div className="space-y-2">
-            <Label>Quantity (kg)</Label>
+
+          {/* Quantity Input */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Enter Quantity (in Kilograms) *</Label>
             <Input
               type="number"
               min="1"
+              max={item.total_yield}
               step="1"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
-              placeholder="Enter quantity"
+              placeholder={`Enter kg (1 to ${item.total_yield})`}
+              className="text-sm font-medium"
             />
           </div>
+
+          {/* Mandatory Delivery Address System */}
           {mode === "buy" && (
-            <div className="space-y-2">
-              <Label>Delivery Address (Optional)</Label>
-              <Input
-                value={deliveryAddress}
-                onChange={(e) => setDeliveryAddress(e.target.value)}
-                placeholder="Enter doorstep delivery address"
+            <div className="pt-2 border-t">
+              <AddressSelector
+                selectedAddressId={selectedAddress?.id}
+                onSelect={(addr) => setSelectedAddress(addr)}
+                title="Delivery Address *"
               />
             </div>
           )}
+
+          {/* Total & Summary Section */}
           {total > 0 && (
-            <div className="bg-muted rounded-md p-3 text-sm space-y-1">
-              <div className="flex justify-between">
-                <span>Total Price</span>
-                <span className="font-bold text-foreground">₹{total.toFixed(2)}</span>
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3.5 text-sm space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-xs">Subtotal ({qty} kg)</span>
+                <span className="font-semibold text-foreground">₹{total.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-muted-foreground text-xs">
-                <span>Payment</span>
-                <span>Cash on Delivery (COD)</span>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-xs">Delivery & Handling</span>
+                <span className="text-primary font-medium text-xs">FREE Farm-to-Door</span>
               </div>
-              <div className="flex justify-between text-muted-foreground text-xs">
-                <span>Est. Delivery</span>
-                <span>2-4 business days</span>
+              <div className="flex justify-between items-center pt-2 border-t border-primary/20 text-base font-bold">
+                <span className="text-foreground">Total Payable</span>
+                <span className="text-primary flex items-center">
+                  <IndianRupee className="w-4 h-4 mr-0.5" />
+                  {total.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between text-muted-foreground text-xs pt-1">
+                <span className="flex items-center gap-1">
+                  <Truck className="w-3.5 h-3.5 text-primary" /> Payment Method: Cash on Delivery (COD)
+                </span>
+                <span>Est. Delivery: 2-4 business days</span>
               </div>
             </div>
           )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Processing..." : "Confirm Order"}
+
+        <DialogFooter className="pt-2">
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || (mode === "buy" && !selectedAddress) || !qtyNum || qtyNum <= 0}
+            className="gap-1.5"
+          >
+            {submitting ? "Processing Order..." : `Confirm Order (₹${total.toFixed(2)})`}
           </Button>
         </DialogFooter>
       </DialogContent>
