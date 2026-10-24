@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 interface RoleGuardProps {
   children: ReactNode;
-  allowedRole: "farmer" | "consumer";
+  allowedRole?: "farmer" | "consumer";
 }
 
 const RoleGuard = ({ children, allowedRole }: RoleGuardProps) => {
@@ -22,7 +22,8 @@ const RoleGuard = ({ children, allowedRole }: RoleGuardProps) => {
     return <Navigate to="/auth/login" replace />;
   }
 
-  if (role && role !== allowedRole) {
+  // Only check role restriction if allowedRole is explicitly specified
+  if (allowedRole && role && role !== allowedRole) {
     return <Navigate to={`/${role}/dashboard`} replace />;
   }
 

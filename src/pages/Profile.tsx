@@ -9,488 +9,845 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Camera, Edit2, Save, X, Activity, Key, LogOut, CheckCircle2 } from "lucide-react";
+import {
+  Camera, Edit2, Save, X, Activity, Key, LogOut, CheckCircle2,
+  MapPin, Wheat, Droplets, Navigation, RefreshCw, AlertCircle
+} from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { broadcastClientSync } from "@/hooks/useRealtimeSync";
+
+const cropOptions = [
+  "Rice", "Wheat", "Maize", "Sugarcane", "Cotton",
+  "Soybean", "Groundnut", "Mustard", "Potato", "Tomato",
+  "Onion", "Chilli", "Turmeric", "Banana", "Mango",
+];
 
 const UnifiedProfile = () => {
-    const { user, role, signOut } = useAuth();
-    const navigate = useNavigate();
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [editMode, setEditMode] = useState(false);
-    const [activeTab, setActiveTab] = useState("personal");
+  const { user, role, signOut, refreshUser } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<"personal" | "farming" | "account">("personal");
 
-    const [formData, setFormData] = useState<any>({});
-    const [initialData, setInitialData] = useState<any>({});
-    const [photoUrl, setPhotoUrl] = useState<string>("");
-    const [uploading, setUploading] = useState(false);
+  const [formData, setFormData] = useState<any>({});
+  const [initialData, setInitialData] = useState<any>({});
+  const [photoUrl, setPhotoUrl] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
 
-    useEffect(() => {
-        if (user) {
-            fetchProfile();
-        }
-    }, [user]);
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
 
-    const fetchProfile = async () => {
-        setLoading(true);
-        try {
-            const data = await api.get<any>("/profile");
-            if (data) {
-                const normalized = {
-                    ...data,
-                    full_name: data.fullName || data.full_name || "",
-                    phone_number: data.phone || data.phone_number || "",
-                    farm_name: data.farmName || data.farm_name || "",
-                    total_land_area: data.totalLandArea ?? data.landArea ?? data.total_land_area ?? "",
-                    primary_crops: data.primaryCrop || data.primary_crops || "",
-                    irrigation_type: data.irrigationType || data.irrigation_type || "",
-                    soil_type: data.soilType || data.soil_type || "",
-                    years_of_experience: data.yearsOfExperience ?? data.years_of_experience ?? "",
-                    business_name: data.businessName || data.business_name || "",
-                    business_type: data.businessType || data.business_type || "",
-                    preferred_crops: data.preferredCrops || data.preferred_crops || "",
-                    purchase_volume_capacity: data.purchaseVolumeCapacity ?? data.purchase_volume_capacity ?? "",
-                    avatar_url: data.avatarUrl || data.avatar_url || "",
-                };
-                setInitialData(normalized);
-                setFormData(normalized);
-                setPhotoUrl(normalized.avatar_url || "");
-            }
-        } catch (err: any) {
-            console.error("Profile load error:", err);
-            const { data } = await supabase.from("profiles").select("*").eq("id", user?.id).single();
-            if (data) {
-                setInitialData(data);
-                setFormData(data);
-                setPhotoUrl((data as any).avatar_url || "");
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
+  const fetchProfile = async () => {
+    setLoading(true);
+    try {
+      const data = await api.get<any>("/profile");
+      if (data) {
+        const normalized = {
+          ...data,
+          full_name: data.fullName || data.full_name || "",
+          phone: data.phone || data.phone_number || "",
+          email: data.email || user?.email || "",
+          region: data.region || "",
+          address: data.address || data.deliveryAddress || "",
+          deliveryAddress: data.deliveryAddress || data.address || "",
+          avatar_url: data.avatarUrl || data.avatar_url || "",
+          latitude: data.latitude !== null && data.latitude !== undefined ? data.latitude : null,
+          longitude: data.longitude !== null && data.longitude !== undefined ? data.longitude : null,
 
-    const handleInputChange = (field: string, value: string) => {
-        setFormData((prev: any) => ({ ...prev, [field]: value }));
-    };
+          // Farmer fields
+          primaryCrop: data.primaryCrop || data.primary_crops || "",
+          secondaryCrop: data.secondaryCrop || data.secondary_crop || "",
+          landArea: data.landArea ?? data.totalLandArea ?? data.total_land_area ?? "",
+          totalYield: data.totalYield ?? data.total_yield ?? "",
+          monthlyProduction: data.monthlyProduction ?? data.monthly_production ?? "",
+          expectedPrice: data.expectedPrice ?? data.expected_price ?? "",
+          waterAvailability: data.waterAvailability || data.water_availability || "Medium",
+          farmingType: data.farmingType || data.farming_type || "Mixed",
+          harvestCycle: data.harvestCycle || data.harvest_cycle || "Seasonal",
 
-    const validate = () => {
-        if (!formData.full_name?.trim()) {
-            toast.error("Full Name cannot be empty");
-            return false;
-        }
-        if (formData.phone_number && !/^\d{10}$/.test(formData.phone_number)) {
-            toast.error("Please enter a valid 10-digit phone number");
-            return false;
-        }
-        if (role === "farmer" && formData.total_land_area && isNaN(Number(formData.total_land_area))) {
-            toast.error("Total Land Area must be numeric");
-            return false;
-        }
-        if (role === "consumer" && formData.purchase_volume_capacity && isNaN(Number(formData.purchase_volume_capacity))) {
-            toast.error("Purchase Volume Capacity must be numeric");
-            return false;
-        }
-        return true;
-    };
+          // Additional agricultural metadata
+          farmName: data.farmName || data.farm_name || "",
+          irrigationType: data.irrigationType || data.irrigation_type || "",
+          soilType: data.soilType || data.soil_type || "",
+          yearsOfExperience: data.yearsOfExperience ?? data.years_of_experience ?? "",
 
-    const handleSave = async () => {
-        if (!validate()) return;
-        setSaving(true);
-
-        const updates = {
-            ...formData,
-            total_land_area: formData.total_land_area ? parseFloat(formData.total_land_area) : null,
-            years_of_experience: formData.years_of_experience ? parseFloat(formData.years_of_experience) : null,
-            purchase_volume_capacity: formData.purchase_volume_capacity ? parseFloat(formData.purchase_volume_capacity) : null,
+          // Consumer fields
+          businessName: data.businessName || data.business_name || "",
+          businessType: data.businessType || data.business_type || "Retailer",
+          preferredCrops: data.preferredCrops || data.preferred_crops || "",
+          purchaseVolumeCapacity: data.purchaseVolumeCapacity ?? data.purchase_volume_capacity ?? "",
         };
 
-        try {
-            const apiUpdates: any = {
-                fullName: formData.full_name,
-                phone: formData.phone_number,
-                region: formData.region,
-                state: formData.state,
-                district: formData.district,
-                mandal: formData.mandal,
-                address: formData.address,
-                avatarUrl: photoUrl || formData.avatar_url,
-            };
-            if (role === "farmer") {
-                apiUpdates.farmName = formData.farm_name;
-                apiUpdates.totalLandArea = formData.total_land_area ? parseFloat(formData.total_land_area) : null;
-                apiUpdates.landArea = formData.total_land_area ? parseFloat(formData.total_land_area) : null;
-                apiUpdates.primaryCrop = formData.primary_crops;
-                apiUpdates.irrigationType = formData.irrigation_type;
-                apiUpdates.soilType = formData.soil_type;
-                apiUpdates.yearsOfExperience = formData.years_of_experience ? parseFloat(formData.years_of_experience) : null;
-            } else {
-                apiUpdates.businessName = formData.business_name;
-                apiUpdates.businessType = formData.business_type;
-                apiUpdates.preferredCrops = formData.preferred_crops;
-                apiUpdates.purchaseVolumeCapacity = formData.purchase_volume_capacity ? parseFloat(formData.purchase_volume_capacity) : null;
-            }
-            await api.put("/profile", apiUpdates);
-            toast.success("Profile updated successfully.");
-            setInitialData({ ...updates });
-            setEditMode(false);
-        } catch (err: any) {
-            toast.error("Failed to update profile: " + err.message);
-        } finally {
-            setSaving(false);
+        setInitialData(normalized);
+        setFormData(normalized);
+        setPhotoUrl(normalized.avatar_url || "");
+      }
+    } catch (err: any) {
+      console.warn("MongoDB profile fetch note, checking Supabase profile fallback:", err);
+      try {
+        const { data } = await supabase.from("profiles").select("*").eq("id", user?.id).single();
+        if (data) {
+          const normalized = {
+            ...data,
+            full_name: data.full_name || "",
+            phone: data.phone || "",
+            email: user?.email || "",
+            region: data.region || "",
+            avatar_url: data.avatar_url || "",
+          };
+          setInitialData(normalized);
+          setFormData(normalized);
+          setPhotoUrl(normalized.avatar_url || "");
         }
-    };
+      } catch (supaErr) {
+        console.error("Profile load error:", supaErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const handleCancel = () => {
-        setFormData({ ...initialData });
-        setEditMode(false);
-    };
+  const handleInputChange = (field: string, value: any) => {
+    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
 
-    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || e.target.files.length === 0) return;
-        const file = e.target.files[0];
-        const fileExt = file.name.split(".").pop();
-        const filePath = `${user?.id}-${Math.random()}.${fileExt}`;
-
-        setUploading(true);
-        const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file);
-
-        if (uploadError) {
-            toast.error("Error uploading image");
-            setUploading(false);
-            return;
-        }
-
-        const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
-
-        // Update profile
-        await supabase.from("profiles").update({ avatar_url: publicUrl } as any).eq("id", user?.id);
-
-        setPhotoUrl(publicUrl);
-        setFormData((prev: any) => ({ ...prev, avatar_url: publicUrl }));
-        setUploading(false);
-        toast.success("Profile photo updated");
-    };
-
-    const calculateCompletion = () => {
-        const requiredCommon = ["full_name", "phone_number", "state", "district", "address"];
-        let filled = 0;
-
-        const requiredRole = role === "farmer"
-            ? [...requiredCommon, "farm_name", "total_land_area", "primary_crops", "irrigation_type", "soil_type", "years_of_experience"]
-            : [...requiredCommon, "business_name", "business_type", "preferred_crops", "purchase_volume_capacity"];
-
-        requiredRole.forEach((field) => {
-            if (initialData[field] && initialData[field] !== "") filled++;
-        });
-
-        return Math.round((filled / requiredRole.length) * 100);
-    };
-
-    if (loading) {
-        return <div className="p-8 text-center text-muted-foreground animate-pulse">Loading profile...</div>;
+  const validate = () => {
+    if (!formData.full_name?.trim()) {
+      toast.error("Full Name cannot be empty");
+      return false;
+    }
+    if (formData.phone && !/^\+?[0-9\s-]{8,15}$/.test(formData.phone)) {
+      toast.error("Please enter a valid phone number (minimum 8-10 digits)");
+      return false;
+    }
+    if (!formData.region?.trim()) {
+      toast.error("Region / District is required");
+      return false;
     }
 
-    const completionPct = calculateCompletion();
+    if (role === "farmer") {
+      if (formData.landArea && isNaN(Number(formData.landArea))) {
+        toast.error("Total Land Area must be a numeric value");
+        return false;
+      }
+      if (formData.totalYield && isNaN(Number(formData.totalYield))) {
+        toast.error("Total Yield must be a numeric value");
+        return false;
+      }
+      if (formData.monthlyProduction && isNaN(Number(formData.monthlyProduction))) {
+        toast.error("Monthly Production must be a numeric value");
+        return false;
+      }
+      if (formData.expectedPrice && isNaN(Number(formData.expectedPrice))) {
+        toast.error("Expected Price must be a numeric value");
+        return false;
+      }
+    }
 
+    if (role === "consumer") {
+      if (formData.purchaseVolumeCapacity && isNaN(Number(formData.purchaseVolumeCapacity))) {
+        toast.error("Purchase Volume Capacity must be a numeric value");
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+
+    toast.info("Requesting precise GPS coordinates...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        handleInputChange("latitude", lat);
+        handleInputChange("longitude", lng);
+        toast.success(`📍 GPS updated: ${lat}, ${lng}`);
+      },
+      (err) => {
+        toast.error("Unable to retrieve location: " + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+    setSaving(true);
+
+    try {
+      const apiUpdates: any = {
+        fullName: formData.full_name?.trim(),
+        phone: formData.phone?.trim(),
+        region: formData.region?.trim(),
+        address: formData.address?.trim() || "",
+        avatarUrl: photoUrl || formData.avatar_url || "",
+        latitude: formData.latitude !== null && formData.latitude !== "" ? parseFloat(formData.latitude) : null,
+        longitude: formData.longitude !== null && formData.longitude !== "" ? parseFloat(formData.longitude) : null,
+      };
+
+      if (role === "farmer") {
+        apiUpdates.primaryCrop = formData.primaryCrop || "";
+        apiUpdates.secondaryCrop = formData.secondaryCrop === "none" ? "" : (formData.secondaryCrop || "");
+        apiUpdates.landArea = formData.landArea ? parseFloat(formData.landArea) : 0;
+        apiUpdates.totalYield = formData.totalYield ? parseFloat(formData.totalYield) : 0;
+        apiUpdates.monthlyProduction = formData.monthlyProduction ? parseFloat(formData.monthlyProduction) : 0;
+        apiUpdates.expectedPrice = formData.expectedPrice ? parseFloat(formData.expectedPrice) : 0;
+        apiUpdates.waterAvailability = formData.waterAvailability || "Medium";
+        apiUpdates.farmingType = formData.farmingType || "Mixed";
+        apiUpdates.harvestCycle = formData.harvestCycle || "Seasonal";
+        apiUpdates.farmName = formData.farmName?.trim() || "";
+        apiUpdates.irrigationType = formData.irrigationType || "";
+        apiUpdates.soilType = formData.soilType || "";
+        apiUpdates.yearsOfExperience = formData.yearsOfExperience ? parseFloat(formData.yearsOfExperience) : null;
+      } else {
+        apiUpdates.deliveryAddress = formData.deliveryAddress?.trim() || formData.address?.trim() || "";
+        apiUpdates.businessName = formData.businessName?.trim() || "";
+        apiUpdates.businessType = formData.businessType || "Retailer";
+        apiUpdates.preferredCrops = formData.preferredCrops?.trim() || "";
+        apiUpdates.purchaseVolumeCapacity = formData.purchaseVolumeCapacity ? parseFloat(formData.purchaseVolumeCapacity) : null;
+      }
+
+      const res = await api.put("/profile", apiUpdates);
+      toast.success("Profile updated successfully!");
+
+      // Broadcast update across connected frontend components
+      broadcastClientSync({
+        type: "SYNC_EVENT",
+        entity: "farmer_profile",
+        action: "update",
+        id: user?.id,
+        data: {
+          id: user?.id,
+          full_name: apiUpdates.fullName,
+          phone: apiUpdates.phone,
+          region: apiUpdates.region,
+          primary_crop: apiUpdates.primaryCrop,
+          secondary_crop: apiUpdates.secondaryCrop,
+          land_area: apiUpdates.landArea,
+          total_yield: apiUpdates.totalYield,
+          monthly_production: apiUpdates.monthlyProduction,
+          expected_price: apiUpdates.expectedPrice,
+          water_availability: apiUpdates.waterAvailability,
+          farming_type: apiUpdates.farmingType,
+          harvest_cycle: apiUpdates.harvestCycle,
+          latitude: apiUpdates.latitude,
+          longitude: apiUpdates.longitude,
+          avatar_url: apiUpdates.avatarUrl,
+        },
+      });
+
+      setInitialData({ ...formData, ...apiUpdates });
+      setEditMode(false);
+      if (refreshUser) refreshUser();
+    } catch (err: any) {
+      toast.error("Failed to update profile: " + (err.message || "Server error"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setFormData({ ...initialData });
+    setPhotoUrl(initialData.avatar_url || "");
+    setEditMode(false);
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const fileExt = file.name.split(".").pop();
+    const filePath = `avatars/${user?.id || "user"}-${Date.now()}.${fileExt}`;
+
+    setUploading(true);
+    try {
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file, {
+        upsert: true,
+      });
+
+      if (uploadError) {
+        // Fallback: convert to base64 Data URL for instant profile picture support
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Url = reader.result as string;
+          setPhotoUrl(base64Url);
+          setFormData((prev: any) => ({ ...prev, avatar_url: base64Url }));
+          toast.success("Photo uploaded successfully");
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+        setPhotoUrl(publicUrl);
+        setFormData((prev: any) => ({ ...prev, avatar_url: publicUrl }));
+        toast.success("Profile photo uploaded successfully");
+      }
+    } catch (err: any) {
+      toast.error("Upload error: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const calculateCompletion = () => {
+    const requiredCommon = ["full_name", "phone", "region"];
+    let filled = 0;
+
+    const requiredFields = role === "farmer"
+      ? [...requiredCommon, "primaryCrop", "landArea", "totalYield", "monthlyProduction", "expectedPrice"]
+      : [...requiredCommon, "address", "preferredCrops"];
+
+    requiredFields.forEach((f) => {
+      if (formData[f] !== undefined && formData[f] !== null && formData[f] !== "") filled++;
+    });
+
+    return Math.round((filled / requiredFields.length) * 100);
+  };
+
+  if (loading) {
     return (
-        <div className="max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-display font-bold">Profile Settings</h1>
-                    <p className="text-muted-foreground mt-1">Manage your account and preferences</p>
-                </div>
-                {!editMode && (
-                    <Button onClick={() => setEditMode(true)} className="gap-2 shrink-0">
-                        <Edit2 className="w-4 h-4" /> Edit Profile
-                    </Button>
+      <div className="p-12 text-center text-muted-foreground animate-pulse">
+        <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 text-primary" />
+        <p className="text-base font-medium">Loading profile information...</p>
+      </div>
+    );
+  }
+
+  const completionPct = calculateCompletion();
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-foreground">Profile Settings</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your account credentials, agricultural registrations, and real-time marketplace details
+          </p>
+        </div>
+        {!editMode ? (
+          <Button onClick={() => setEditMode(true)} className="gap-2 shrink-0">
+            <Edit2 className="w-4 h-4" /> Edit Profile
+          </Button>
+        ) : (
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" onClick={handleCancel} disabled={saving}>
+              <X className="w-4 h-4 mr-2" /> Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="w-4 h-4 mr-2" /> {saving ? "Saving Changes..." : "Save Changes"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Left Column: Avatar & Summary */}
+        <div className="md:col-span-1 space-y-6">
+          <Card className="text-center overflow-hidden border-border/60">
+            <div className="h-24 bg-gradient-to-r from-primary to-primary/80 w-full" />
+            <CardContent className="pt-0 relative px-6 pb-6">
+              <div className="relative w-24 h-24 mx-auto -mt-12 mb-4 rounded-full border-4 border-card bg-muted flex items-center justify-center overflow-hidden shadow">
+                {photoUrl ? (
+                  <img src={photoUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl font-bold text-muted-foreground">
+                    {(formData.full_name || "U").charAt(0).toUpperCase()}
+                  </span>
                 )}
                 {editMode && (
-                    <div className="flex gap-2 shrink-0">
-                        <Button variant="outline" onClick={handleCancel} disabled={saving}><X className="w-4 h-4 mr-2" /> Cancel</Button>
-                        <Button onClick={handleSave} disabled={saving}><Save className="w-4 h-4 mr-2" /> {saving ? 'Saving...' : 'Save Changes'}</Button>
-                    </div>
+                  <label className="absolute inset-0 bg-black/50 cursor-pointer flex items-center justify-center transition-opacity opacity-0 hover:opacity-100">
+                    <Camera className="w-6 h-6 text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={uploading}
+                    />
+                  </label>
                 )}
-            </div>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                {/* SIDEBAR & PHOTO */}
-                <div className="md:col-span-1 space-y-6">
-                    <Card className="text-center overflow-hidden border-border/60">
-                        <div className="h-24 bg-gradient-to-r from-primary/80 to-primary-focus w-full"></div>
-                        <CardContent className="pt-0 relative px-6 pb-6">
-                            <div className="relative w-24 h-24 mx-auto -mt-12 mb-4 rounded-full border-4 border-card bg-muted flex items-center justify-center overflow-hidden">
-                                {photoUrl ? (
-                                    <img src={photoUrl} alt="Profile" className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-3xl font-bold text-muted-foreground">{formData.full_name?.charAt(0).toUpperCase()}</span>
-                                )}
-                                {editMode && (
-                                    <label className="absolute inset-0 bg-black/50 cursor-pointer flex items-center justify-center transition-opacity opacity-0 hover:opacity-100">
-                                        <Camera className="w-6 h-6 text-white" />
-                                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
-                                    </label>
-                                )}
-                            </div>
-                            <h2 className="text-xl font-bold truncate">{formData.full_name || "User Name"}</h2>
-                            <p className="text-sm text-muted-foreground capitalize">{role}</p>
+              <h2 className="text-xl font-bold truncate text-foreground">{formData.full_name || "User"}</h2>
+              <Badge variant="secondary" className="mt-1 capitalize">
+                {role === "farmer" ? "🌾 Registered Farmer" : "🛒 Verified Consumer"}
+              </Badge>
 
-                            <div className="mt-4 space-y-2 text-sm text-left px-2">
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                    <span className="font-semibold text-foreground">Email:</span>
-                                    <span className="truncate" title={formData.email}>{formData.email || "N/A"}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                    <span className="font-semibold text-foreground">Location:</span>
-                                    <span className="truncate" title={`${formData.district || ''}, ${formData.state || ''}`.replace(/^, /, '')}>
-                                        {formData.district || formData.state ? `${formData.district || ''}${formData.district && formData.state ? ', ' : ''}${formData.state || ''}` : "N/A"}
-                                    </span>
-                                </div>
-                                {role === "farmer" && (
-                                    <>
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                            <span className="font-semibold text-foreground">Crops:</span>
-                                            <span className="truncate" title={formData.primary_crops}>{formData.primary_crops || "N/A"}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                            <span className="font-semibold text-foreground">Yield (Land):</span>
-                                            <span className="truncate">{formData.total_land_area ? `${formData.total_land_area} Acres` : "N/A"}</span>
-                                        </div>
-                                    </>
-                                )}
-                                {role === "consumer" && (
-                                    <>
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                            <span className="font-semibold text-foreground">Needs:</span>
-                                            <span className="truncate" title={formData.preferred_crops}>{formData.preferred_crops || "N/A"}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                            <span className="font-semibold text-foreground">Volume:</span>
-                                            <span className="truncate">{formData.purchase_volume_capacity ? `${formData.purchase_volume_capacity} Tons` : "N/A"}</span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-
-                            <div className="mt-4 pt-4 border-t border-border/50 text-left">
-                                <p className="text-xs font-bold uppercase text-muted-foreground mb-2 flex justify-between">
-                                    Profile Completion <span>{completionPct}%</span>
-                                </p>
-                                <Progress value={completionPct} className="h-2" />
-                                {completionPct < 100 && (
-                                    <p className="text-xs text-agri-amber mt-2 leading-tight">Complete your profile to unlock all platform features.</p>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-border/60">
-                        <div className="flex flex-col p-2">
-                            <button
-                                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${activeTab === 'personal' ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-muted-foreground'}`}
-                                onClick={() => setActiveTab('personal')}
-                            >
-                                <Activity className="w-4 h-4" /> Personal Information
-                            </button>
-                            <button
-                                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${activeTab === 'account' ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-muted-foreground'}`}
-                                onClick={() => setActiveTab('account')}
-                            >
-                                <Key className="w-4 h-4" /> Account Settings
-                            </button>
-                        </div>
-                    </Card>
+              <div className="mt-4 space-y-2.5 text-sm text-left px-1 border-t border-border/50 pt-3">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="font-medium text-foreground text-xs">Region:</span>
+                  <span className="truncate max-w-[140px] font-semibold text-xs text-foreground">
+                    {formData.region || "Not specified"}
+                  </span>
                 </div>
+                {role === "farmer" && (
+                  <>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span className="font-medium text-foreground text-xs">Primary Crop:</span>
+                      <span className="truncate max-w-[140px] font-semibold text-xs text-foreground">
+                        {formData.primaryCrop || "None"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span className="font-medium text-foreground text-xs">Land Area:</span>
+                      <span className="font-semibold text-xs text-foreground">
+                        {formData.landArea ? `${formData.landArea} Acres` : "0 Acres"}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {role === "consumer" && (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span className="font-medium text-foreground text-xs">Type:</span>
+                    <span className="font-semibold text-xs text-foreground">
+                      {formData.businessType || "Retailer"}
+                    </span>
+                  </div>
+                )}
+              </div>
 
-                {/* MAIN FIELDS */}
-                <div className="md:col-span-3 space-y-6">
-                    <Card className="border-border/60">
-                        <CardHeader className="bg-muted/30 border-b">
-                            <CardTitle>{activeTab === 'personal' ? 'Personal Information' : 'Account Details'}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6">
+              <div className="mt-4 pt-3 border-t border-border/50 text-left">
+                <p className="text-xs font-bold uppercase text-muted-foreground mb-1.5 flex justify-between">
+                  Profile Completion <span>{completionPct}%</span>
+                </p>
+                <Progress value={completionPct} className="h-2" />
+              </div>
+            </CardContent>
+          </Card>
 
-                            {activeTab === 'personal' && (
-                                <div className="space-y-8">
-
-                                    {/* Common Personal */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-bold uppercase tracking-wider text-primary border-b pb-2">Basic Info</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>Full Name *</Label>
-                                                <Input value={formData.full_name || ""} onChange={(e) => handleInputChange("full_name", e.target.value)} disabled={!editMode} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Phone Number</Label>
-                                                <Input value={formData.phone_number || ""} onChange={(e) => handleInputChange("phone_number", e.target.value)} disabled={!editMode} placeholder="10-digit number" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Common Location */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-bold uppercase tracking-wider text-primary border-b pb-2">Location</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>State</Label>
-                                                <Select disabled={!editMode} value={formData.state || ""} onValueChange={(val) => handleInputChange("state", val)}>
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue placeholder="Select state" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="State A">State A</SelectItem>
-                                                        <SelectItem value="State B">State B</SelectItem>
-                                                        <SelectItem value="State C">State C</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>District</Label>
-                                                <Select disabled={!editMode} value={formData.district || ""} onValueChange={(val) => handleInputChange("district", val)}>
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue placeholder="Select district" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="District X">District X</SelectItem>
-                                                        <SelectItem value="District Y">District Y</SelectItem>
-                                                        <SelectItem value="District Z">District Z</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Mandal / Tehsil</Label>
-                                                <Select disabled={!editMode} value={formData.mandal || ""} onValueChange={(val) => handleInputChange("mandal", val)}>
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue placeholder="Select mandal" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="Mandal 1">Mandal 1</SelectItem>
-                                                        <SelectItem value="Mandal 2">Mandal 2</SelectItem>
-                                                        <SelectItem value="Mandal 3">Mandal 3</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Detailed Address</Label>
-                                            <Input value={formData.address || ""} onChange={(e) => handleInputChange("address", e.target.value)} disabled={!editMode} />
-                                        </div>
-                                    </div>
-
-                                    {/* Role Specific */}
-                                    {role === "farmer" && (
-                                        <div className="space-y-4">
-                                            <h3 className="text-sm font-bold uppercase tracking-wider text-agri-orange border-b pb-2 flex items-center gap-2">
-                                                Agricultural Details
-                                                {completionPct === 100 && <Badge className="bg-green-500 hover:bg-green-600 gap-1"><CheckCircle2 className="w-3 h-3" /> Verified Farmer</Badge>}
-                                            </h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label>Farm Name</Label>
-                                                    <Input value={formData.farm_name || ""} onChange={(e) => handleInputChange("farm_name", e.target.value)} disabled={!editMode} placeholder="E.g. Green Acres" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Total Land Area (Acres)</Label>
-                                                    <Input value={formData.total_land_area || ""} onChange={(e) => handleInputChange("total_land_area", e.target.value)} disabled={!editMode} type="number" step="0.1" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Primary Crops</Label>
-                                                    <Input value={formData.primary_crops || ""} onChange={(e) => handleInputChange("primary_crops", e.target.value)} disabled={!editMode} placeholder="E.g. Rice, Cotton" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Irrigation Type</Label>
-                                                    <Select disabled={!editMode} value={formData.irrigation_type || ""} onValueChange={(val) => handleInputChange("irrigation_type", val)}>
-                                                        <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="Drip">Drip Irrigation</SelectItem>
-                                                            <SelectItem value="Sprinkler">Sprinkler</SelectItem>
-                                                            <SelectItem value="Rainfed">Rainfed</SelectItem>
-                                                            <SelectItem value="Canal">Canal</SelectItem>
-                                                            <SelectItem value="Borewell">Borewell</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Soil Type</Label>
-                                                    <Input value={formData.soil_type || ""} onChange={(e) => handleInputChange("soil_type", e.target.value)} disabled={!editMode} placeholder="E.g. Black, Red, Loamy" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Years of Experience</Label>
-                                                    <Input value={formData.years_of_experience || ""} onChange={(e) => handleInputChange("years_of_experience", e.target.value)} disabled={!editMode} type="number" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {role === "consumer" && (
-                                        <div className="space-y-4">
-                                            <h3 className="text-sm font-bold uppercase tracking-wider text-agri-orange border-b pb-2">Business Details</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label>Business Name</Label>
-                                                    <Input value={formData.business_name || ""} onChange={(e) => handleInputChange("business_name", e.target.value)} disabled={!editMode} placeholder="E.g. Fresh Foods Ltd" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Business Type</Label>
-                                                    <Select disabled={!editMode} value={formData.business_type || ""} onValueChange={(val) => handleInputChange("business_type", val)}>
-                                                        <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="Retailer">Retailer</SelectItem>
-                                                            <SelectItem value="Wholesaler">Wholesaler</SelectItem>
-                                                            <SelectItem value="Processor">Processor</SelectItem>
-                                                            <SelectItem value="Exporter">Exporter</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Preferred Crops</Label>
-                                                    <Input value={formData.preferred_crops || ""} onChange={(e) => handleInputChange("preferred_crops", e.target.value)} disabled={!editMode} placeholder="E.g. Wheat, Rice" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Purchase Volume Capacity (Tons)</Label>
-                                                    <Input value={formData.purchase_volume_capacity || ""} onChange={(e) => handleInputChange("purchase_volume_capacity", e.target.value)} disabled={!editMode} type="number" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {activeTab === 'account' && (
-                                <div className="space-y-6">
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-bold text-foreground border-b pb-2">Account Identifiers</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>Email Address <span className="text-xs text-muted-foreground ml-2">(Read-only)</span></Label>
-                                                <Input value={formData.email || ""} disabled className="bg-muted" />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Account Role <span className="text-xs text-muted-foreground ml-2">(Read-only)</span></Label>
-                                                <Input value={formData.role || ""} disabled className="bg-muted capitalize" />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Account Created <span className="text-xs text-muted-foreground ml-2">(Read-only)</span></Label>
-                                                <Input value={new Date(formData.created_at).toLocaleDateString()} disabled className="bg-muted" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="pt-6 border-t border-border space-y-4">
-                                        <h3 className="text-sm font-bold text-destructive">Danger Zone</h3>
-                                        <p className="text-sm text-muted-foreground">Once you delete your account, there is no going back. Please be certain.</p>
-                                        <Button variant="destructive" disabled>Delete Account</Button>
-                                    </div>
-                                </div>
-                            )}
-
-                        </CardContent>
-                    </Card>
-                </div>
+          {/* Navigation Tabs */}
+          <Card className="border-border/60">
+            <div className="flex flex-col p-2 space-y-1">
+              <button
+                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "personal"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "hover:bg-muted/50 text-muted-foreground"
+                }`}
+                onClick={() => setActiveTab("personal")}
+              >
+                <Activity className="w-4 h-4" /> Personal Details
+              </button>
+              {role === "farmer" && (
+                <button
+                  className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "farming"
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "hover:bg-muted/50 text-muted-foreground"
+                  }`}
+                  onClick={() => setActiveTab("farming")}
+                >
+                  <Wheat className="w-4 h-4" /> Farming & Crops
+                </button>
+              )}
+              <button
+                className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "account"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "hover:bg-muted/50 text-muted-foreground"
+                }`}
+                onClick={() => setActiveTab("account")}
+              >
+                <Key className="w-4 h-4" /> Account & Security
+              </button>
             </div>
+          </Card>
         </div>
-    );
+
+        {/* Right Column: Editable Form Fields */}
+        <div className="md:col-span-3 space-y-6">
+          <Card className="border-border/60">
+            <CardHeader className="bg-muted/20 border-b">
+              <CardTitle className="text-lg">
+                {activeTab === "personal"
+                  ? "Contact & Location Information"
+                  : activeTab === "farming"
+                  ? "Cultivation, Harvest & Production Details"
+                  : "Account & Login Security"}
+              </CardTitle>
+              <CardDescription>
+                {editMode
+                  ? "Modify fields and click Save Changes to sync across the system."
+                  : "Click 'Edit Profile' to update your details."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+
+              {/* 1. PERSONAL TAB */}
+              {activeTab === "personal" && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="full_name">Full Name *</Label>
+                      <Input
+                        id="full_name"
+                        value={formData.full_name || ""}
+                        onChange={(e) => handleInputChange("full_name", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="Your full name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number *</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        value={formData.phone || ""}
+                        onChange={(e) => handleInputChange("phone", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="+91 9876543210"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="region">Region / District *</Label>
+                      <Input
+                        id="region"
+                        value={formData.region || ""}
+                        onChange={(e) => handleInputChange("region", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="e.g. Nashik, Maharashtra or Guntur"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Address / Village / Town</Label>
+                      <Input
+                        id="address"
+                        value={formData.address || ""}
+                        onChange={(e) => handleInputChange("address", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="Street, Landmark, Village"
+                      />
+                    </div>
+                  </div>
+
+                  {/* GPS Coordinates Section */}
+                  <div className="p-4 border rounded-lg bg-muted/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-primary" />
+                        <span className="font-semibold text-sm">Farm / Delivery GPS Coordinates</span>
+                      </div>
+                      {editMode && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={detectLocation}
+                          className="h-8 gap-1.5 text-xs"
+                        >
+                          <Navigation className="w-3.5 h-3.5 text-primary" /> Auto-Detect GPS
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Latitude</Label>
+                        <Input
+                          type="number"
+                          step="0.0001"
+                          value={formData.latitude !== null && formData.latitude !== undefined ? formData.latitude : ""}
+                          onChange={(e) => handleInputChange("latitude", e.target.value)}
+                          disabled={!editMode}
+                          placeholder="e.g. 17.3850"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Longitude</Label>
+                        <Input
+                          type="number"
+                          step="0.0001"
+                          value={formData.longitude !== null && formData.longitude !== undefined ? formData.longitude : ""}
+                          onChange={(e) => handleInputChange("longitude", e.target.value)}
+                          disabled={!editMode}
+                          placeholder="e.g. 78.4867"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Consumer Business Details (if consumer role) */}
+                  {role === "consumer" && (
+                    <div className="border-t pt-4 space-y-4">
+                      <h3 className="font-semibold text-sm text-foreground">Consumer Preferences</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Business / Establishment Name</Label>
+                          <Input
+                            value={formData.businessName || ""}
+                            onChange={(e) => handleInputChange("businessName", e.target.value)}
+                            disabled={!editMode}
+                            placeholder="e.g. Fresh Mart Retailers"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Business Type</Label>
+                          <Select
+                            disabled={!editMode}
+                            value={formData.businessType || "Retailer"}
+                            onValueChange={(val) => handleInputChange("businessType", val)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Individual">Individual Consumer</SelectItem>
+                              <SelectItem value="Retailer">Retailer</SelectItem>
+                              <SelectItem value="Wholesaler">Wholesaler</SelectItem>
+                              <SelectItem value="Restaurant">Restaurant / Hotel</SelectItem>
+                              <SelectItem value="Processor">Food Processor</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Preferred Crops / Produce</Label>
+                          <Input
+                            value={formData.preferredCrops || ""}
+                            onChange={(e) => handleInputChange("preferredCrops", e.target.value)}
+                            disabled={!editMode}
+                            placeholder="e.g. Rice, Tomato, Onion"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Monthly Purchase Volume (kg/tons)</Label>
+                          <Input
+                            type="number"
+                            value={formData.purchaseVolumeCapacity || ""}
+                            onChange={(e) => handleInputChange("purchaseVolumeCapacity", e.target.value)}
+                            disabled={!editMode}
+                            placeholder="e.g. 500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2. FARMING TAB (Farmers Only) */}
+              {activeTab === "farming" && role === "farmer" && (
+                <div className="space-y-6">
+                  {/* Primary & Secondary Crops */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Primary Crop *</Label>
+                      <Select
+                        disabled={!editMode}
+                        value={formData.primaryCrop || ""}
+                        onValueChange={(val) => handleInputChange("primaryCrop", val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select primary crop" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cropOptions.map((crop) => (
+                            <SelectItem key={crop} value={crop}>{crop}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Secondary Crop (Optional)</Label>
+                      <Select
+                        disabled={!editMode}
+                        value={formData.secondaryCrop || "none"}
+                        onValueChange={(val) => handleInputChange("secondaryCrop", val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select secondary crop" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {cropOptions.map((crop) => (
+                            <SelectItem key={crop} value={crop}>{crop}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Land Area, Yield, Monthly Production, Price */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                      <Label>Land Area (Acres) *</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.landArea || ""}
+                        onChange={(e) => handleInputChange("landArea", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="e.g. 5"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Yield (kg) *</Label>
+                      <Input
+                        type="number"
+                        step="1"
+                        value={formData.totalYield || ""}
+                        onChange={(e) => handleInputChange("totalYield", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="e.g. 2500"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Monthly Yield (kg) *</Label>
+                      <Input
+                        type="number"
+                        step="1"
+                        value={formData.monthlyProduction || ""}
+                        onChange={(e) => handleInputChange("monthlyProduction", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="e.g. 500"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Price (₹/kg) *</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        value={formData.expectedPrice || ""}
+                        onChange={(e) => handleInputChange("expectedPrice", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="e.g. 45"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Agricultural Practices */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
+                    <div className="space-y-2">
+                      <Label>Water Availability</Label>
+                      <Select
+                        disabled={!editMode}
+                        value={formData.waterAvailability || "Medium"}
+                        onValueChange={(val) => handleInputChange("waterAvailability", val)}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Low">Low</SelectItem>
+                          <SelectItem value="Medium">Medium</SelectItem>
+                          <SelectItem value="High">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Farming Method</Label>
+                      <Select
+                        disabled={!editMode}
+                        value={formData.farmingType || "Mixed"}
+                        onValueChange={(val) => handleInputChange("farmingType", val)}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Organic">Organic</SelectItem>
+                          <SelectItem value="Mixed">Mixed</SelectItem>
+                          <SelectItem value="Chemical">Conventional / Chemical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Harvest Cycle</Label>
+                      <Select
+                        disabled={!editMode}
+                        value={formData.harvestCycle || "Seasonal"}
+                        onValueChange={(val) => handleInputChange("harvestCycle", val)}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Monthly">Monthly</SelectItem>
+                          <SelectItem value="Seasonal">Seasonal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Optional Farm Brand Details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                    <div className="space-y-2">
+                      <Label>Farm Brand / Estate Name</Label>
+                      <Input
+                        value={formData.farmName || ""}
+                        onChange={(e) => handleInputChange("farmName", e.target.value)}
+                        disabled={!editMode}
+                        placeholder="e.g. Green Valley Farm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Irrigation Infrastructure</Label>
+                      <Select
+                        disabled={!editMode}
+                        value={formData.irrigationType || "Rainfed"}
+                        onValueChange={(val) => handleInputChange("irrigationType", val)}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Drip">Drip Irrigation</SelectItem>
+                          <SelectItem value="Sprinkler">Sprinkler System</SelectItem>
+                          <SelectItem value="Rainfed">Rainfed</SelectItem>
+                          <SelectItem value="Canal">Canal / River</SelectItem>
+                          <SelectItem value="Borewell">Borewell</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. ACCOUNT & SECURITY TAB */}
+              {activeTab === "account" && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Registered Email Address</Label>
+                      <Input value={formData.email || user?.email || ""} disabled className="bg-muted" />
+                      <p className="text-[11px] text-muted-foreground">
+                        Your email address is your verified sign-in identity.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Account Role</Label>
+                      <Input value={role || ""} disabled className="bg-muted capitalize" />
+                      <p className="text-[11px] text-muted-foreground">
+                        Permissions are bound to this authenticated account role.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 border rounded-lg bg-amber-500/10 border-amber-500/20 text-amber-900 dark:text-amber-200 space-y-2">
+                    <div className="flex items-center gap-2 font-semibold text-sm">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      <span>Security & Password Protection</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      To change your password, you can use the secure single-use Password Reset procedure sent directly to your registered email address.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default UnifiedProfile;

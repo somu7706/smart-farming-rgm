@@ -86,7 +86,8 @@ const Marketplace = () => {
             distance_km = haversine(consumerLoc.lat, consumerLoc.lng, p.latitude, p.longitude);
           }
           return {
-            farmer_id: p.farmer_id || p.id,
+            id: p.id || p._id,
+            farmer_id: p.farmer_id || p.farmerId || p.id,
             farmer_name: p.farmer_name,
             region: p.region,
             crop_name: p.crop_name,

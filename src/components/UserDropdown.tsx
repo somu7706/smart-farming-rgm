@@ -19,7 +19,7 @@ const UserDropdown = () => {
   };
 
   const initials = user?.email?.charAt(0).toUpperCase() || "U";
-  const profilePath = "/profile";
+  const profilePath = role === "consumer" ? "/consumer/profile" : "/farmer/profile";
 
   return (
     <DropdownMenu>
@@ -28,9 +28,9 @@ const UserDropdown = () => {
           {initials}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onClick={() => navigate(profilePath)}>
-          <User className="w-4 h-4 mr-2" /> Profile
+          <Settings className="w-4 h-4 mr-2" /> Profile Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="text-destructive">

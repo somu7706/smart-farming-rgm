@@ -90,6 +90,7 @@ export const updateProfile = async (req, res) => {
           expected_price: updatedProfile.expectedPrice,
           water_availability: updatedProfile.waterAvailability,
           farming_type: updatedProfile.farmingType,
+          harvest_cycle: updatedProfile.harvestCycle,
           latitude: updatedProfile.latitude,
           longitude: updatedProfile.longitude,
           avatar_url: updatedProfile.avatarUrl,

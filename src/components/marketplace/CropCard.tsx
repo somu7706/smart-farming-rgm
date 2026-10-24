@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MapPin, IndianRupee, Package, Wheat, ShoppingCart, Flame, TrendingDown } from "lucide-react";
 
 export interface MarketCrop {
+  id?: string;
   farmer_id: string;
   farmer_name: string;
   region: string | null;

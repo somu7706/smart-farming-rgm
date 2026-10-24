@@ -81,13 +81,13 @@ export const register = async (req, res) => {
     // Generate compatible UUID for Supabase identity mapping
     const supabaseId = crypto.randomUUID();
 
-    // Create User (Auto-verified so Render Free Tier SMTP port blocking never locks users out)
+    // Create User in pending-verification state
     const newUser = await User.create({
       email: email.toLowerCase().trim(),
       password: hashedPassword,
       role,
       supabaseId,
-      isEmailVerified: true,
+      isEmailVerified: false,
       emailVerificationToken: hashedVerificationToken,
       emailVerificationExpires: verificationExpires,
       lastVerificationEmailSentAt: new Date(),
@@ -311,10 +311,14 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password." });
     }
 
-    // Ensure email is marked verified
+    // Validate verification status: do not grant access to unverified accounts
     if (!user.isEmailVerified) {
-      user.isEmailVerified = true;
-      await user.save();
+      return res.status(403).json({
+        success: false,
+        needsVerification: true,
+        email: user.email,
+        message: "Email not verified. Please check your inbox or request a new verification link.",
+      });
     }
 
     // Get user profile details

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +48,26 @@ const Traceability = () => {
   useEffect(() => {
     if (!user) return;
     const fetchOrders = async () => {
+      try {
+        const res = await api.get<{ orders: any[] }>("/orders");
+        if (res && res.orders && res.orders.length > 0) {
+          setOrders(
+            res.orders.map((o: any) => ({
+              id: o.id,
+              crop_name: o.crop_name || o.cropName,
+              farmer_id: o.farmer_id || o.farmerId,
+              status: o.status,
+              created_at: o.created_at || o.createdAt,
+              farmer_name: o.farmer_name || "Verified Farmer",
+            }))
+          );
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        // Fallback to Supabase
+      }
+
       const { data } = await supabase
         .from("orders")
         .select("id, crop_name, farmer_id, status, created_at")

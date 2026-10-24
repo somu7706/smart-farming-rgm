@@ -16,6 +16,14 @@ export const authenticate = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid session. User not found." });
     }
 
+    if (!user.isEmailVerified && !req.path.endsWith("/me")) {
+      return res.status(403).json({
+        success: false,
+        needsVerification: true,
+        message: "Email verification required. Please verify your email before accessing this resource.",
+      });
+    }
+
     req.user = user;
     req.userId = user._id;
     req.supabaseId = user.supabaseId;

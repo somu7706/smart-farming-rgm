@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { Sprout, TrendingUp, Droplets, AlertTriangle, Shield, ArrowRight, Heart, ChevronDown, IndianRupee, Package } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,12 +18,11 @@ const Dashboard = () => {
     { name: "Soil Health Card", desc: "Test soil health and get nutrient recommendations." },
   ]);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      if (!user) return;
+  const fetchStats = useCallback(async () => {
+    if (!user) return;
 
-      try {
-        console.log("Fetching dashboard stats for user:", user.id);
+    try {
+      console.log("Fetching dashboard stats for user:", user.id);
 
         let cropCount = 0;
         let waterLabel = "0L";
@@ -59,57 +59,74 @@ const Dashboard = () => {
           }
         }
 
-        // Count active orders (not delivered, not rejected)
-        const { count: activeOrders } = await supabase
-          .from("orders")
-          .select("*", { count: "exact", head: true })
-          .eq("farmer_id", user.id)
-          .not("status", "in", '("delivered","rejected")');
+        // Orders metrics from backend API with fallback
+        let activeOrdersCount = 0;
+        let pendingOrdersCount = 0;
+        let revenueAmount = 0;
 
-        // Count pending orders as alerts
-        const { count: pendingOrders } = await supabase
-          .from("orders")
-          .select("*", { count: "exact", head: true })
-          .eq("farmer_id", user.id)
-          .eq("status", "pending");
+        try {
+          const orderStatsRes = await api.get<any>("/orders/stats");
+          if (orderStatsRes?.stats) {
+            activeOrdersCount = orderStatsRes.stats.activeOrders || 0;
+            pendingOrdersCount = orderStatsRes.stats.pendingOrders || 0;
+            revenueAmount = orderStatsRes.stats.totalRevenue || 0;
+          }
+        } catch (apiOrderErr) {
+          const { count: activeOrders } = await supabase
+            .from("orders")
+            .select("*", { count: "exact", head: true })
+            .eq("farmer_id", user.id)
+            .not("status", "in", '("delivered","rejected")');
 
-        // Calculate revenue from delivered orders
-        const { data: deliveredOrders } = await supabase
-          .from("orders")
-          .select("total_price")
-          .eq("farmer_id", user.id)
-          .eq("status", "delivered");
+          const { count: pendingOrders } = await supabase
+            .from("orders")
+            .select("*", { count: "exact", head: true })
+            .eq("farmer_id", user.id)
+            .eq("status", "pending");
 
-        const revenue = (deliveredOrders || []).reduce((sum, o) => sum + Number(o.total_price), 0);
+          const { data: deliveredOrders } = await supabase
+            .from("orders")
+            .select("total_price")
+            .eq("farmer_id", user.id)
+            .eq("status", "delivered");
 
-        console.log("Dashboard stats:", { cropCount, activeOrders, revenue, pendingOrders });
+          activeOrdersCount = activeOrders ?? 0;
+          pendingOrdersCount = pendingOrders ?? 0;
+          revenueAmount = (deliveredOrders || []).reduce((sum, o) => sum + Number(o.total_price), 0);
+        }
 
         setStats({
           totalCrops: cropCount,
-          activeOrders: activeOrders ?? 0,
-          revenue,
+          activeOrders: activeOrdersCount,
+          revenue: revenueAmount,
           waterSaved: waterLabel,
-          alerts: pendingOrders ?? 0,
+          alerts: pendingOrdersCount,
         });
+        setLoading(false);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
         toast.error("Failed to load dashboard data");
+        setLoading(false);
       }
-      setLoading(false);
-    };
+    }, [user]);
+
+  useRealtimeSync("order", () => {
+    fetchStats();
+  });
+
+  useEffect(() => {
     fetchStats();
 
-    // Realtime subscription for orders
+    // Supabase Realtime fallback
     const channel = supabase
       .channel("dashboard-orders")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `farmer_id=eq.${user?.id}` }, () => {
-        console.log("Orders changed, refetching dashboard stats");
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
         fetchStats();
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [fetchStats]);
 
   const statCards = [
     { label: "Total Crops", value: loading ? "..." : String(stats.totalCrops), sub: "Your registered crops", icon: Sprout, color: "text-primary" },

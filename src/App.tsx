@@ -2,8 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/hooks/useAuth";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import RoleGuard from "@/components/RoleGuard";
@@ -61,6 +61,21 @@ const ConsumerRoute = ({ children }: { children: React.ReactNode }) => (
   </RoleGuard>
 );
 
+const ProfileRedirect = () => {
+  const { role, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading profile...</div>
+      </div>
+    );
+  }
+  if (role === "consumer") {
+    return <Navigate to="/consumer/profile" replace />;
+  }
+  return <Navigate to="/farmer/profile" replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -111,7 +126,7 @@ const App = () => (
                 <Route path="/consumer/orders/:orderId" element={<ConsumerRoute><OrderTracking /></ConsumerRoute>} />
                 <Route path="/consumer/profile" element={<ConsumerRoute><Profile /></ConsumerRoute>} />
                 <Route path="/farmer/profile" element={<FarmerRoute><Profile /></FarmerRoute>} />
-                <Route path="/profile" element={<RoleGuard allowedRole={undefined as any}><Profile /></RoleGuard>} />
+                <Route path="/profile" element={<RoleGuard><ProfileRedirect /></RoleGuard>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

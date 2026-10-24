@@ -10,6 +10,7 @@ import { syncManager } from "./config/websocket.js";
 import authRoutes from "./routes/authRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -71,6 +72,7 @@ app.get("/api/test-email", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/orders", orderRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

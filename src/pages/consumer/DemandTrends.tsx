@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,6 +41,14 @@ const DemandTrends = () => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  useRealtimeSync("farmer_profile", () => {
+    fetchData();
+  });
+
+  useRealtimeSync("product", () => {
+    fetchData();
+  });
 
   const activeOrders = useMemo(() => orders.filter((o) => o.status !== "rejected"), [orders]);
   const cropNames = useMemo(() => [...new Set(activeOrders.map((o) => o.crop_name))].sort(), [activeOrders]);

@@ -2,7 +2,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, ScanLine, Landmark, Cloud, BarChart3,
   TrendingUp, MapPin, Droplets, FlaskConical, BookOpen, ShoppingCart, LogOut,
-  Clock
+  Clock, User
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ const navItems = [
   { to: "/farmer/fertilizer", label: "AI Chatbot", icon: FlaskConical },
   { to: "/farmer/orders", label: "Orders", icon: ShoppingCart },
   { to: "/agri-chrono", label: "AgriChrono™", icon: Clock },
+  { to: "/farmer/profile", label: "Profile Settings", icon: User },
 ];
 
 const AppSidebar = () => {

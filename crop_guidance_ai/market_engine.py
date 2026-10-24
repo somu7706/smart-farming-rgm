@@ -11,7 +11,9 @@ import os
 from groq import Groq
 from pydantic import BaseModel
 
-engine = create_engine("sqlite:///market_intel.db", connect_args={"check_same_thread": False})
+DB_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(DB_DIR, "market_intel.db")
+engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -176,18 +178,7 @@ def update_market_data():
         })
 
     db.close()
-    
-    # Broadcast
-    if manager.active_connections:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            try:
-                loop = asyncio.get_event_loop()
-            except Exception:
-                loop = None
-        if loop and loop.is_running():
-            asyncio.run_coroutine_threadsafe(manager.broadcast(json.dumps({"type": "MARKET_UPDATE", "data": latest_data})), loop)
+    return latest_data
 
 market_task = None
 

@@ -38,12 +38,18 @@ interface peakData {
 }
 
 // Ensure the host is correct for WebSocket & API
-const AI_ENGINE_URL = "https://smart-farming-rgm.onrender.com";
+const AI_ENGINE_URL = import.meta.env.VITE_FASTAPI_URL || "https://smart-farming-rgm.onrender.com";
 
 const getMarketWsUrl = () => {
   if (import.meta.env.VITE_AI_WS_URL) return import.meta.env.VITE_AI_WS_URL;
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//smart-farming-rgm.onrender.com/ws/market-stream`;
+  try {
+    const url = new URL(AI_ENGINE_URL, window.location.origin);
+    const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${url.host}/ws/market-stream`;
+  } catch (e) {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//smart-farming-rgm.onrender.com/ws/market-stream`;
+  }
 };
 
 const MarketInsights = () => {

@@ -15,7 +15,7 @@ const navItems = [
   { to: "/consumer/bulk", label: "Bulk Orders", icon: Package },
   { to: "/consumer/traceability", label: "Traceability", icon: ShieldCheck },
   { to: "/consumer/orders", label: "My Orders", icon: ShoppingCart },
-  { to: "/consumer/profile", label: "Profile", icon: User },
+  { to: "/consumer/profile", label: "Profile Settings", icon: User },
 ];
 
 const ConsumerSidebar = () => {
